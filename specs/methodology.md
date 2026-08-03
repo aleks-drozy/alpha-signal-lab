@@ -201,3 +201,88 @@ every ingest.
 This is research into a methodology and audit harness, not a trading system
 or investment recommendation. Nothing in this repository constitutes
 financial advice.
+
+## Addendum: post-hoc supplementary analyses (added 2026-08-03, after the primary verdict)
+
+Everything above this line is the frozen pre-registered spec, computed and
+verdict-sealed before this addendum was written. The primary NULL verdict
+(honest OOS mean rank IC ~0.0100, Newey-West t-stat ~1.50, below the
+0.02 / 2.0 bar) stands exactly as originally computed and is **not** altered,
+re-run, or cherry-picked by anything below.
+
+The analyses in this addendum are diagnostic/robustness checks computed on
+top of the already-generated OOS predictions (`data/processed/oos_predictions.parquet`)
+after the primary result was seen. They exist to answer follow-up questions
+a careful reader would ask next ("is this just momentum in disguise?", "does
+it work in some regime?", "is one fixed walk-forward path a fluke of that
+particular split?"), not to search for a way to turn the NULL into a PASS.
+If any of them had come back positive, that would not overturn the primary
+verdict; it would only be reported as a secondary finding worth a proper
+pre-registered follow-up study. In fact all of them reinforce the primary
+NULL.
+
+**Erratum (noted here, primary section above left untouched):** the primary
+section's prose above says "30 US large/mega-cap liquid names"; the actual
+frozen `UNIVERSE` list in `src/alpha_lab/config.py` has always had 31 names
+and every result in this project (folds, IC, the addendum analyses) was
+computed on the real 31-name list, not on 30. This is a descriptive miscount
+in the spec's prose written before the pipeline ran, not a change to the
+universe itself, and not a results-driven edit: the actual ticker list is
+unchanged and was never edited. `REPORT.md` and the dashboard now read the
+count from `config.py` directly (`len(UNIVERSE)`) rather than a hardcoded
+number, so this class of error cannot silently recur.
+
+1. **Feature neutralization vs momentum** (`src/alpha_lab/neutralize.py`,
+   `data/processed/neutralization.json`). Cross-sectionally residualizes the
+   model's OOS predictions against the 12-1 momentum feature per date (simple
+   per-date OLS, prediction regressed on momentum, residual taken), then
+   recomputes rank IC on the residual. Tests whether the model contributes
+   anything orthogonal to plain momentum.
+
+2. **Regime / slice breakdown** (`src/alpha_lab/regime.py`,
+   `data/processed/regime_breakdown.json`). Median-splits the OOS period into
+   high- and low-volatility regimes using the trailing 21-day realized
+   volatility of the equal-weight universe mean daily return (computed from
+   raw, pre rank-transform returns, not the rank-transformed feature), and
+   reports rank IC separately per regime. Also reports per-ticker
+   time-series rank IC across all 30 names, honestly, including if it is
+   indistinguishable from noise.
+
+3. **Rolling per-fold SHAP importance over time**
+   (`src/alpha_lab/explain.py`, `data/processed/shap_importance_over_time.json`).
+   The per-fold mean |SHAP| values that were already computed for the
+   stability-ranking heatmap are reshaped into a fold-indexed time series (one
+   row per fold, one column per feature, with each fold's test date range) so
+   a rolling-importance chart can be drawn on the dashboard.
+
+4. **Reproducibility manifest** (`data/provenance.json`, written by
+   `run_all.py` at the end of a full run). Python version, pinned versions of
+   the key packages actually installed (lightgbm, pandas, numpy,
+   scikit-learn, shap), the frozen random seed from `config.py`, and a single
+   "run fingerprint" sha256 over the concatenated raw-input file hashes from
+   `data/manifest.json`.
+
+5. **CPCV + simplified single-config PBO** (`src/alpha_lab/cpcv.py`,
+   `data/processed/cpcv.json`). Combinatorial Purged Cross-Validation:
+   instead of the one fixed walk-forward path, multiple train/test path
+   combinations are drawn from the same ~21 six-month test blocks used by the
+   primary spec (choose 2 blocks as test per combination, purge + embargo
+   applied symmetrically around each held-out block since a CPCV test block
+   is not always at the trailing edge of the training window), LightGBM
+   refit per combination using the *same frozen hyperparameters* (no
+   tuning), and rank IC computed per path. The result is a distribution of
+   OOS rank IC (mean, std, 95% CI by both normal approximation and
+   percentile) instead of one point estimate, plus a **simplified,
+   single-config "logit-PBO"**: since there is only one frozen candidate
+   config here (not a searched candidate set), this is not the full
+   multi-strategy Bailey et al. CSCV/PBO framework. It is a diagnostic proxy
+   -- the fraction of CPCV paths where in-sample rank IC is above the
+   cross-path in-sample median while out-of-sample rank IC is below the
+   cross-path out-of-sample median, log-odds transformed -- reported
+   honestly as such, not as a full PBO estimate.
+
+If the CPCV 95% CI includes zero, that is read as a stronger form of the same
+NULL finding (the single walk-forward path was not an unlucky low draw from
+a real positive distribution), not as a different or contradicting result.
+Likewise, a still-null neutralized IC is reported plainly as "still null after
+removing momentum overlap," not reframed.

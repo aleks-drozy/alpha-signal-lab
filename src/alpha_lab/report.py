@@ -25,10 +25,10 @@ from alpha_lab.config import (
     INGEST_START_DATE,
     LGBM,
     REQUIRED_ENCODING,
+    UNIVERSE,
 )
 from alpha_lab.evaluate import (
     METRICS_PATH,
-    buy_hold_baseline,
     daily_rank_ic,
     rebalance_dates,
     top_bottom_period_returns,
@@ -36,11 +36,16 @@ from alpha_lab.evaluate import (
 from alpha_lab.features import FEATURES_PATH
 from alpha_lab.leaky_twin import LEAKY_TWIN_METRICS_PATH
 from alpha_lab.model import OOS_PREDICTIONS_PATH
-from alpha_lab.explain import SHAP_STABILITY_PATH
+from alpha_lab.explain import SHAP_IMPORTANCE_OVER_TIME_PATH, SHAP_STABILITY_PATH
+from alpha_lab.neutralize import NEUTRALIZATION_PATH
+from alpha_lab.regime import REGIME_BREAKDOWN_PATH
+from alpha_lab.cpcv import CPCV_PATH
+from alpha_lab.util import atomic_write_json, atomic_write_text
 
 RESULTS_PATH = DOCS_DIR / "results.json"
 REPORT_PATH = DOCS_DIR.parent / "REPORT.md"
 BADGES_PATH = DOCS_DIR / "badges.json"
+PROVENANCE_PATH = DOCS_DIR.parent / "data" / "provenance.json"
 
 ROLLING_IC_WINDOW = 63
 
@@ -64,6 +69,25 @@ def _fmt(value, digits: int = 4, pct: bool = False, tbd: str = "TBD") -> str:
     if pct:
         return f"{f * 100:.2f}%"
     return f"{f:.{digits}f}"
+
+
+def _momentum_baseline_note(mean_ic: float | None, tstat: float | None) -> str:
+    if mean_ic is None or tstat is None:
+        return ""
+    clears = mean_ic > IC_SUCCESS_THRESHOLD and tstat > IC_TSTAT_SUCCESS_THRESHOLD
+    if clears:
+        return (
+            f"**The no-model 12-1 momentum baseline itself clears the "
+            f"pre-registered bar** (mean rank IC {_fmt(mean_ic)} > {IC_SUCCESS_THRESHOLD}, "
+            f"NW t-stat {_fmt(tstat, digits=2)} > {IC_TSTAT_SUCCESS_THRESHOLD}) while the "
+            f"LightGBM model does not. This is the honest headline of the primary "
+            f"result, not a footnote: on this universe and horizon, a single "
+            f"engineered feature outperforms the full model."
+        )
+    return (
+        f"The no-model 12-1 momentum baseline does not clear the pre-registered "
+        f"bar either (mean rank IC {_fmt(mean_ic)}, NW t-stat {_fmt(tstat, digits=2)})."
+    )
 
 
 def _cum_curve(period_returns: pd.DataFrame, ret_col: str) -> tuple[list[str], list[float]]:
@@ -134,7 +158,6 @@ def build_dashboard_series() -> dict:
     _, model_net = _cum_curve(model_periods, "net_ret")
     _, momentum_gross = _cum_curve(momentum_periods, "gross_ret")
 
-    bh = buy_hold_baseline(joined)
     bh_rows = []
     for d in rebal_ds:
         day = joined[joined["date"] == d]
@@ -143,7 +166,8 @@ def build_dashboard_series() -> dict:
         bh_rows.append({"date": d, "gross_ret": float(day["fwd_ret_5d"].mean())})
     bh_df = pd.DataFrame(bh_rows)
     _, bh_gross = _cum_curve(bh_df, "gross_ret") if not bh_df.empty else ([], [])
-    del bh  # summary stats already in metrics.json / leaky_twin_metrics.json
+    # summary stats (sharpe/drawdown/etc.) for buy-hold live in metrics.json / leaky_twin_metrics.json;
+    # this block only rebuilds the cumulative curve for the dashboard chart.
 
     ic_series = daily_rank_ic(joined, "y_pred")
     roll_dates, roll_values = _rolling_ic_series(ic_series)
@@ -171,6 +195,15 @@ def build_results_json() -> dict:
     shap_stability = _load_json(SHAP_STABILITY_PATH)
     badges = _load_json(BADGES_PATH) or []
     series = build_dashboard_series()
+
+    # Post-hoc addendum artifacts. Each may not exist yet (this can run
+    # before all supplementary analyses have been computed), so every read
+    # here must degrade to None/empty rather than raising.
+    neutralization = _load_json(NEUTRALIZATION_PATH)
+    regime_breakdown = _load_json(REGIME_BREAKDOWN_PATH)
+    shap_importance_over_time = _load_json(SHAP_IMPORTANCE_OVER_TIME_PATH)
+    cpcv = _load_json(CPCV_PATH)
+    provenance = _load_json(PROVENANCE_PATH)
 
     run_completed = metrics is not None
     verdict_met = metrics["success_criterion"]["met"] if run_completed else None
@@ -212,6 +245,10 @@ def build_results_json() -> dict:
             "leaky_mean_ic": leaky["rank_ic"]["mean"] if leaky else None,
             "leaky_tstat": leaky["rank_ic"]["newey_west_tstat"] if leaky else None,
         },
+        "momentum_clears_bar": (
+            metrics["momentum_baseline"]["rank_ic"]["mean"] > IC_SUCCESS_THRESHOLD
+            and metrics["momentum_baseline"]["rank_ic"]["newey_west_tstat"] > IC_TSTAT_SUCCESS_THRESHOLD
+        ) if run_completed else None,
         "equity_curves": series["equity_curves"],
         "rolling_ic": series["rolling_ic"],
         "per_fold_ic": series["per_fold_ic"],
@@ -233,6 +270,18 @@ def build_results_json() -> dict:
         },
         "lgbm_params": LGBM.as_params(),
         "feature_columns": FEATURE_COLUMNS,
+        "addendum": {
+            "note": (
+                "Post-hoc supplementary analyses, computed after the primary "
+                "pre-registered verdict above. See specs/methodology.md "
+                "addendum section. None of these alter the primary verdict."
+            ),
+            "neutralization": neutralization,
+            "regime_breakdown": regime_breakdown,
+            "shap_importance_over_time": shap_importance_over_time,
+            "cpcv": cpcv,
+            "provenance": provenance,
+        },
     }
     return results
 
@@ -245,6 +294,168 @@ def _audit_receipt_table(badges: list[dict]) -> str:
         status = "PASS" if b["passed"] else "FAIL"
         lines.append(f"| {b['test']} | {status} | {b['description']} |")
     return "\n".join(lines)
+
+
+def _render_addendum_section(addendum: dict) -> str:
+    neut = addendum.get("neutralization")
+    regime = addendum.get("regime_breakdown")
+    shap_time = addendum.get("shap_importance_over_time")
+    cpcv = addendum.get("cpcv")
+    prov = addendum.get("provenance")
+
+    parts = [
+        "## Addendum: post-hoc supplementary analyses",
+        "",
+        "Everything in this section was computed after the primary verdict "
+        "above was sealed. These are diagnostic/robustness checks on top of "
+        "the already-generated OOS predictions, not a re-run or re-framing "
+        "of the primary result; see the addendum in "
+        "[`specs/methodology.md`](specs/methodology.md) for the full framing.",
+        "",
+    ]
+
+    parts.append("### Feature neutralization vs 12-1 momentum")
+    if neut:
+        raw = neut["raw"]
+        neutd = neut["neutralized"]
+        still_null = neutd["mean"] is None or neutd["mean"] <= IC_SUCCESS_THRESHOLD or (
+            neutd["newey_west_tstat"] is None or neutd["newey_west_tstat"] <= IC_TSTAT_SUCCESS_THRESHOLD
+        )
+        parts.append(
+            f"\n| | Mean rank IC | Newey-West t-stat |\n|---|---|---|\n"
+            f"| Raw predictions | {_fmt(raw['mean'])} | {_fmt(raw['newey_west_tstat'], digits=2)} |\n"
+            f"| Neutralized vs momentum | {_fmt(neutd['mean'])} | {_fmt(neutd['newey_west_tstat'], digits=2)} |\n"
+        )
+        verdict_line = (
+            "Residualizing against 12-1 momentum still leaves the signal below "
+            "the pre-registered bar: this is still a NULL result after removing "
+            "momentum overlap, not a different one."
+            if still_null
+            else "Residualizing against 12-1 momentum leaves a mean IC above the "
+            "pre-registered bar. Reported here as a secondary finding worth a "
+            "proper pre-registered follow-up study, not as an amendment to the "
+            "primary NULL verdict, which stands as computed."
+        )
+        parts.append(verdict_line)
+        ic_clears = neutd["mean"] is not None and neutd["mean"] > IC_SUCCESS_THRESHOLD
+        t_clears = neutd["newey_west_tstat"] is not None and neutd["newey_west_tstat"] > IC_TSTAT_SUCCESS_THRESHOLD
+        if still_null and t_clears and not ic_clears:
+            parts.append(
+                f"Noted for transparency: the neutralized NW t-stat "
+                f"({_fmt(neutd['newey_west_tstat'], digits=2)}) crosses the "
+                f"{IC_TSTAT_SUCCESS_THRESHOLD} bar on its own, but the IC "
+                f"criterion ({_fmt(neutd['mean'])}) does not clear "
+                f"{IC_SUCCESS_THRESHOLD}. The pre-registered rule requires "
+                f"both (AND), so this remains NULL under that rule."
+            )
+    else:
+        parts.append("TBD, run `python -m alpha_lab.neutralize`.")
+
+    parts.append("\n### Regime and per-ticker breakdown")
+    if regime:
+        ric = regime["regime_rank_ic"]
+        lines = ["\n| Regime | Mean rank IC | Newey-West t-stat | N days |", "|---|---|---|---|"]
+        for name, stats in ric.items():
+            lines.append(
+                f"| {name} | {_fmt(stats['mean'])} | {_fmt(stats['newey_west_tstat'], digits=2)} | {stats['n_days']} |"
+            )
+        parts.append("\n".join(lines))
+        ts = regime["per_ticker_ic_summary"]
+        n_tickers = ts["n_tickers_total"]
+        parts.append(
+            f"\nAcross {n_tickers} names, per-ticker time-series rank IC has mean "
+            f"{_fmt(ts['mean_across_tickers'])} (std {_fmt(ts['std_across_tickers'])}), "
+            f"with {ts['n_tickers_with_positive_ic']}/{ts['n_tickers_total']} tickers "
+            f"showing a positive IC. With only {n_tickers} names and no correction for "
+            "multiple comparisons, this spread is consistent with noise around a "
+            "small or zero true effect, and is reported as such rather than as a "
+            "\"the signal works on ticker X\" claim."
+        )
+    else:
+        parts.append("TBD, run `python -m alpha_lab.regime`.")
+
+    parts.append("\n### Rolling per-fold SHAP importance over time")
+    if shap_time and shap_time.get("rows"):
+        parts.append(
+            f"\n{len(shap_time['rows'])} folds x {len(shap_time['feature_columns'])} features written to "
+            "`data/processed/shap_importance_over_time.json` for the dashboard's "
+            "rolling-importance chart (full series omitted from this table for "
+            "brevity)."
+        )
+    else:
+        parts.append("TBD, run `python -m alpha_lab.explain`.")
+
+    parts.append("\n### CPCV (Combinatorial Purged Cross-Validation) + simplified single-config PBO")
+    if cpcv and cpcv.get("paths"):
+        dist = cpcv["oos_ic_distribution"]
+        pbo = cpcv["pbo"]
+        ci_n_lo, ci_n_hi = dist["ci_95_normal"]
+        ci_p_lo, ci_p_hi = dist["ci_95_percentile"]
+        normal_excludes_zero = ci_n_lo is not None and ci_n_hi is not None and not (ci_n_lo <= 0.0 <= ci_n_hi)
+        percentile_includes_zero = ci_p_lo is not None and ci_p_hi is not None and ci_p_lo <= 0.0 <= ci_p_hi
+        mean_below_bar = dist["mean"] is not None and dist["mean"] <= IC_SUCCESS_THRESHOLD
+        parts.append(
+            f"\n{cpcv['n_paths_sampled']} of {cpcv['n_combinations_total']} possible "
+            f"{cpcv['n_test_blocks_per_path']}-block combinations sampled (seed="
+            f"{cpcv['seed']}), same frozen hyperparameters refit per path, runtime "
+            f"{_fmt(cpcv['runtime_seconds'], digits=1)}s.\n\n"
+            f"| | Value |\n|---|---|\n"
+            f"| OOS rank IC across paths (mean) | {_fmt(dist['mean'])} |\n"
+            f"| OOS rank IC across paths (std) | {_fmt(dist['std'])} |\n"
+            f"| 95% CI (normal approx.) | [{_fmt(ci_n_lo)}, {_fmt(ci_n_hi)}] |\n"
+            f"| 95% CI (percentile) | [{_fmt(ci_p_lo)}, {_fmt(ci_p_hi)}] |\n"
+            f"| Simplified logit-PBO | {_fmt(pbo.get('logit_pbo'), digits=3)} (PBO={_fmt(pbo.get('pbo'), digits=3)}) |\n"
+        )
+        interval_note = (
+            "The two 95% CIs disagree on whether zero is excluded (normal "
+            "approximation excludes it, the percentile interval does not), "
+            "which with only 20 paths and a right-skewed path distribution is "
+            "itself a sign the interval estimate is not precise enough to lean "
+            "on either way."
+            if (normal_excludes_zero and percentile_includes_zero)
+            else (
+                "Both interval estimates exclude zero."
+                if normal_excludes_zero and not percentile_includes_zero
+                else "Both interval estimates include zero."
+            )
+        )
+        parts.append(
+            f"{interval_note} What both agree on: the mean OOS rank IC across "
+            f"CPCV paths ({_fmt(dist['mean'])}) is "
+            f"{'still below' if mean_below_bar else 'above'} the pre-registered "
+            f"{IC_SUCCESS_THRESHOLD} bar. "
+            + (
+                "This is read as a stronger form of the same primary NULL "
+                "finding: the single walk-forward path was not an unlucky low "
+                "draw from a real positive distribution, since a distribution "
+                "of comparable, equally valid splits does not clear the bar "
+                "either. It is not a different or contradicting result."
+                if mean_below_bar
+                else "Reported here as a secondary finding for a proper "
+                "pre-registered follow-up study; the primary pre-registered "
+                "verdict above stands unchanged since it was computed on the "
+                "one frozen walk-forward path specified before any result was "
+                "seen."
+            )
+        )
+        parts.append(f"\n{pbo.get('note', '')}")
+    else:
+        parts.append("TBD, run `python -m alpha_lab.cpcv`.")
+
+    parts.append("\n### Reproducibility manifest")
+    if prov:
+        pkgs = ", ".join(f"{k}={v}" for k, v in (prov.get("package_versions") or {}).items())
+        fp = prov.get("run_fingerprint_sha256") or "N/A"
+        parts.append(
+            f"\nPython {prov.get('python_version', 'N/A').split()[0]}, packages: {pkgs}. "
+            f"Random seed: {prov.get('random_seed')}. Run fingerprint (sha256 over "
+            f"concatenated raw-input file hashes): `{fp[:16]}...`. Full manifest in "
+            "`data/provenance.json`."
+        )
+    else:
+        parts.append("TBD, written by `python -m alpha_lab.run_all` at the end of a full run.")
+
+    return "\n".join(parts) + "\n"
 
 
 def render_report_md(results: dict) -> str:
@@ -287,6 +498,8 @@ def render_report_md(results: dict) -> str:
 | Decile spread (annualized) | {_fmt(momentum["decile_spread"]["annualized_spread"], pct=True)} |
 | Sharpe (gross) | {_fmt(momentum["equity_curve_gross"]["sharpe"], digits=2)} |
 
+{_momentum_baseline_note(momentum["rank_ic"]["mean"], momentum["rank_ic"]["newey_west_tstat"])}
+
 ### Equal-weight buy-and-hold baseline
 
 | Metric | Value |
@@ -295,7 +508,7 @@ def render_report_md(results: dict) -> str:
 | Sharpe | {_fmt(buy_hold["equity_curve_gross"]["sharpe"], digits=2)} |
 | Max drawdown | {_fmt(buy_hold["equity_curve_gross"]["max_drawdown"], pct=True)} |
 
-### Leaky-twin comparison (naive shuffled 5-fold CV, no purge/embargo)
+### Leaky-twin comparison (naive shuffled 5-fold CV, no purge/embargo, same OOS date range as the honest model)
 
 | Metric | Honest (PurgedWalkForward) | Leaky twin |
 |---|---|---|
@@ -327,6 +540,7 @@ held identical.
         churn_note = "TBD."
 
     audits = _audit_receipt_table(results["audits"])
+    addendum_section = _render_addendum_section(results.get("addendum") or {})
 
     template = f"""# REPORT: ML Alpha Signal Research Pipeline
 
@@ -339,7 +553,7 @@ Generated at: {results["generated_at"]}
 
 Does gradient boosting (LightGBM) on 12 standard price/volume features add
 predictive power over plain momentum and buy-and-hold, on 5-day
-cross-sectional excess returns for 30 large-cap US equities, under
+cross-sectional excess returns for {len(UNIVERSE)} large-cap US equities, under
 leakage-proof purged walk-forward evaluation?
 
 ## Pre-registration
@@ -364,8 +578,11 @@ that is reported as a NULL result, not reframed as a partial success.
 
 ## Data & known biases
 
-- Universe: 30 hand-picked US large/mega-cap names, liquid since 2010, plus
-  `^SPX` as benchmark context only (not traded).
+- Universe: {len(UNIVERSE)} hand-picked US large/mega-cap names, liquid since 2010,
+  plus `^SPX` as benchmark context only (not traded). (The frozen spec's prose
+  says "30 names"; the actual list has always had {len(UNIVERSE)}. This is a
+  descriptive miscount in the spec text, not a change to the universe itself,
+  see the addendum erratum in `specs/methodology.md`.)
 - Source: Stooq primary, yfinance fallback, 3-ticker cross-check logged in
   `data/manifest.json`.
 - Ingest from {INGEST_START_DATE}, evaluation from {EVAL_START_DATE} through
@@ -404,15 +621,15 @@ in CI (`.github/workflows/ci.yml`).
 
 ## Known limitations
 
-- Survivorship bias in the hand-picked 30-name universe.
+- Survivorship bias in the hand-picked {len(UNIVERSE)}-name universe.
 - Single asset class (US large-cap equities); no cross-asset generalization
   claim.
 - Fixed hyperparameters, not tuned: avoids an obvious leakage vector at the
   cost of not representing a best-effort model.
 - Flat 10 bps per side transaction cost model; real costs vary by name, size,
   and market regime.
-- 30 names is a small cross-section for daily rank IC and decile-spread
-  statistics.
+- {len(UNIVERSE)} names is a small cross-section for daily rank IC and
+  decile-spread statistics.
 
 ## What would change the answer
 
@@ -426,12 +643,27 @@ in CI (`.github/workflows/ci.yml`).
 - A more realistic cost model (size-dependent slippage, borrow cost for
   shorts) instead of the flat 10 bps assumption.
 
+{addendum_section}
 ## Disclaimer
 
 This is research into a methodology and audit harness, not a trading system
 or investment recommendation. Nothing here constitutes financial advice.
 """
     return template
+
+
+def _sanitize_for_json(obj):
+    """NaN/Infinity are valid Python float literals but not valid JSON;
+    json.dump's default allow_nan=True emits them anyway, which breaks
+    JSON.parse in the browser and would crash the dashboard on any
+    degenerate metric. Recursively convert them to None instead."""
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_for_json(v) for v in obj]
+    if isinstance(obj, float) and (obj != obj or obj in (float("inf"), float("-inf"))):
+        return None
+    return obj
 
 
 def run_report(force: bool = False) -> dict:
@@ -442,13 +674,12 @@ def run_report(force: bool = False) -> dict:
     results = build_results_json()
 
     DOCS_DIR.mkdir(parents=True, exist_ok=True)
-    with open(RESULTS_PATH, "w", encoding=REQUIRED_ENCODING) as f:
-        json.dump(results, f, indent=2)
+    sanitized_results = _sanitize_for_json(results)
+    atomic_write_json(RESULTS_PATH, sanitized_results, encoding=REQUIRED_ENCODING, indent=2, allow_nan=False)
     print(f"wrote {RESULTS_PATH}")
 
     report_md = render_report_md(results)
-    with open(REPORT_PATH, "w", encoding=REQUIRED_ENCODING) as f:
-        f.write(report_md)
+    atomic_write_text(REPORT_PATH, report_md, encoding=REQUIRED_ENCODING)
     print(f"wrote {REPORT_PATH}")
     print(f"verdict: {results['verdict']['text']}")
     return results
