@@ -3,65 +3,93 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>alpha-signal-lab — ML Alpha Signal Research Pipeline</title>
+<title>alpha-signal-lab — pre-registered ML alpha signal research</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
+  /* ============================================================
+     Tokens. Low-chroma indigo-tinted neutrals + a full named
+     semantic palette: honest (teal) / leaky (coral) / pass (green)
+     / fail+null (warm red / muted amber-slate). Every pairing below
+     was checked against WCAG AA (4.5:1 body, 3:1 large/UI) in both
+     light and dark before being committed here.
+     ============================================================ */
   :root {
     --bg: #f6f7fb;
-    --bg-elevated: #ffffff;
-    --card-border: #e3e6ee;
-    --text: #14161f;
-    --text-muted: #5b6072;
-    --text-faint: #8b90a0;
-    --accent: #2f5fdd;
-    --accent-soft: #e8edfc;
-    --green: #1f9d55;
-    --green-soft: #e5f7ec;
-    --red: #d1414a;
-    --red-soft: #fbe9ea;
-    --amber: #c8811a;
-    --amber-soft: #fbf1e1;
-    --line: #d7dbe6;
-    --shadow: 0 1px 2px rgba(20, 22, 31, 0.04), 0 4px 16px rgba(20, 22, 31, 0.05);
-    --chart-grid: #e6e8f0;
+    --bg-raised: #fbfcfe;
+    --paper: #ffffff;          /* frame for exported PNGs only */
+    --line: #d8dae6;
+    --line-strong: #b9bdd0;
+    --text: #14151c;
+    --text-muted: #4a4e5e;     /* ~7.7:1 on --bg */
+    --text-faint: #5e6275;     /* ~5.6:1 on --bg, small-text safe */
+
+    --honest: #0f766e;         /* ~5.4:1 on white/--bg */
+    --honest-soft: color-mix(in srgb, var(--honest) 12%, var(--bg));
+    --leaky: #c2410c;          /* ~4.8:1 on white/--bg */
+    --leaky-soft: color-mix(in srgb, var(--leaky) 12%, var(--bg));
+    --pass: #15803d;           /* ~4.7:1 on white/--bg */
+    --pass-soft: color-mix(in srgb, var(--pass) 12%, var(--bg));
+    --fail: #b91c1c;           /* ~6.0:1 on white/--bg */
+    --fail-soft: color-mix(in srgb, var(--fail) 12%, var(--bg));
+    --null: #8a5a17;           /* ~5.5:1 on white/--bg, deliberately quiet */
+    --null-soft: color-mix(in srgb, var(--null) 12%, var(--bg));
+    --other: #5b4fc4;          /* neutral categorical accent (momentum line etc) */
+
+    --chart-grid: #e4e6ef;
+    --shadow: 0 1px 2px rgba(20, 22, 31, 0.05), 0 10px 28px rgba(20, 22, 31, 0.06);
     --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    --mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", monospace;
+    --mono: "Cascadia Code", "SF Mono", ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1); /* ease-out-quint */
   }
 
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0e1017;
-      --bg-elevated: #171a24;
-      --card-border: #272b3a;
-      --text: #eceef4;
-      --text-muted: #a4a9ba;
-      --text-faint: #6b7086;
-      --accent: #6d93ff;
-      --accent-soft: #1c2745;
-      --green: #4fce8b;
-      --green-soft: #123322;
-      --red: #ef6b72;
-      --red-soft: #3a1c1f;
-      --amber: #e2ab55;
-      --amber-soft: #3a2c14;
-      --line: #2a2e3d;
-      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
-      --chart-grid: #262a38;
+      --bg: #14151c;
+      --bg-raised: #191b24;
+      --paper: #eef0f6;
+      --line: #2b2e3d;
+      --line-strong: #3c3f52;
+      --text: #f2f3f7;
+      --text-muted: #a8acc0;   /* ~8.1:1 on --bg */
+      --text-faint: #82869c;   /* ~5.1:1 on --bg */
+
+      --honest: #2dd4bf;
+      --honest-soft: color-mix(in srgb, var(--honest) 14%, var(--bg));
+      --leaky: #fb923c;
+      --leaky-soft: color-mix(in srgb, var(--leaky) 14%, var(--bg));
+      --pass: #4ade80;
+      --pass-soft: color-mix(in srgb, var(--pass) 14%, var(--bg));
+      --fail: #f87171;
+      --fail-soft: color-mix(in srgb, var(--fail) 14%, var(--bg));
+      --null: #d4a24c;
+      --null-soft: color-mix(in srgb, var(--null) 14%, var(--bg));
+      --other: #a79cf5;
+
+      --chart-grid: #262a3a;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.45);
     }
   }
   :root[data-theme="dark"] {
-    --bg: #0e1017; --bg-elevated: #171a24; --card-border: #272b3a; --text: #eceef4;
-    --text-muted: #a4a9ba; --text-faint: #6b7086; --accent: #6d93ff; --accent-soft: #1c2745;
-    --green: #4fce8b; --green-soft: #123322; --red: #ef6b72; --red-soft: #3a1c1f;
-    --amber: #e2ab55; --amber-soft: #3a2c14; --line: #2a2e3d;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35); --chart-grid: #262a38;
+    --bg: #14151c; --bg-raised: #191b24; --paper: #eef0f6; --line: #2b2e3d; --line-strong: #3c3f52;
+    --text: #f2f3f7; --text-muted: #a8acc0; --text-faint: #82869c;
+    --honest: #2dd4bf; --honest-soft: color-mix(in srgb, var(--honest) 14%, var(--bg));
+    --leaky: #fb923c; --leaky-soft: color-mix(in srgb, var(--leaky) 14%, var(--bg));
+    --pass: #4ade80; --pass-soft: color-mix(in srgb, var(--pass) 14%, var(--bg));
+    --fail: #f87171; --fail-soft: color-mix(in srgb, var(--fail) 14%, var(--bg));
+    --null: #d4a24c; --null-soft: color-mix(in srgb, var(--null) 14%, var(--bg));
+    --other: #a79cf5;
+    --chart-grid: #262a3a; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px rgba(0,0,0,.45);
   }
   :root[data-theme="light"] {
-    --bg: #f6f7fb; --bg-elevated: #ffffff; --card-border: #e3e6ee; --text: #14161f;
-    --text-muted: #5b6072; --text-faint: #8b90a0; --accent: #2f5fdd; --accent-soft: #e8edfc;
-    --green: #1f9d55; --green-soft: #e5f7ec; --red: #d1414a; --red-soft: #fbe9ea;
-    --amber: #c8811a; --amber-soft: #fbf1e1; --line: #d7dbe6;
-    --shadow: 0 1px 2px rgba(20,22,31,.04), 0 4px 16px rgba(20,22,31,.05); --chart-grid: #e6e8f0;
+    --bg: #f6f7fb; --bg-raised: #fbfcfe; --paper: #ffffff; --line: #d8dae6; --line-strong: #b9bdd0;
+    --text: #14151c; --text-muted: #4a4e5e; --text-faint: #5e6275;
+    --honest: #0f766e; --honest-soft: color-mix(in srgb, var(--honest) 12%, var(--bg));
+    --leaky: #c2410c; --leaky-soft: color-mix(in srgb, var(--leaky) 12%, var(--bg));
+    --pass: #15803d; --pass-soft: color-mix(in srgb, var(--pass) 12%, var(--bg));
+    --fail: #b91c1c; --fail-soft: color-mix(in srgb, var(--fail) 12%, var(--bg));
+    --null: #8a5a17; --null-soft: color-mix(in srgb, var(--null) 12%, var(--bg));
+    --other: #5b4fc4;
+    --chart-grid: #e4e6ef; --shadow: 0 1px 2px rgba(20,22,31,.05), 0 10px 28px rgba(20,22,31,.06);
   }
 
   * { box-sizing: border-box; }
@@ -70,100 +98,127 @@
     background: var(--bg);
     color: var(--text);
     font-family: var(--font);
-    line-height: 1.5;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap {
-    max-width: 1120px;
-    margin: 0 auto;
-    padding: 28px 20px 80px;
-  }
+  ::selection { background: color-mix(in srgb, var(--honest) 30%, transparent); }
 
-  a { color: var(--accent); }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 22px 96px; }
+
+  a { color: var(--honest); }
+  a:hover { text-decoration-thickness: 2px; }
+
+  code, .mono { font-family: var(--mono); }
 
   .eyebrow {
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.09em;
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--text-faint);
-    margin: 0 0 8px;
+    margin: 0 0 10px;
   }
   h1 {
-    font-size: clamp(22px, 3.4vw, 30px);
-    line-height: 1.28;
-    margin: 0 0 14px;
+    font-size: clamp(24px, 3.6vw, 34px);
+    line-height: 1.24;
+    margin: 0 0 20px;
     font-weight: 650;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.012em;
+    max-width: 46ch;
   }
   h2 {
-    font-size: 16px;
+    font-size: 20px;
     font-weight: 650;
-    margin: 0 0 4px;
-    letter-spacing: -0.005em;
+    margin: 0 0 6px;
+    letter-spacing: -0.008em;
   }
-  .section-desc {
-    font-size: 13px;
-    color: var(--text-muted);
-    margin: 0 0 16px;
-  }
+  h3 { font-size: 14.5px; font-weight: 650; margin: 0 0 12px; }
+  .section-desc { font-size: 13.5px; color: var(--text-muted); margin: 0 0 20px; max-width: 68ch; }
 
-  .card {
-    background: var(--bg-elevated);
-    border: 1px solid var(--card-border);
-    border-radius: 14px;
-    box-shadow: var(--shadow);
-    padding: 20px 22px;
-  }
-  section { margin-top: 28px; }
+  section { margin-top: 56px; }
   section:first-of-type { margin-top: 0; }
+  .section-inner { padding-top: 2px; }
 
-  /* Header / verdict */
-  .header-card { padding: 24px 26px; }
+  /* Deliberate, sparse use of the purge/embargo gap motif as a structural
+     divider — never decorative wallpaper. */
+  .rule-gap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 48px 0 0;
+    color: var(--text-faint);
+  }
+  .rule-gap .seg { flex: 1; height: 1px; background: var(--line); }
+  .rule-gap .tag {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 3px 9px;
+    border: 1px dashed var(--line-strong);
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  /* ---- Header / verdict ---- */
+  .header-block { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
   .meta-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 22px;
-    margin-top: 14px;
+    gap: 7px 24px;
+    margin-top: 16px;
     font-size: 13px;
     color: var(--text-muted);
   }
-  .meta-row span b { color: var(--text); font-weight: 600; }
+  .meta-row span b { color: var(--text); font-weight: 600; font-family: var(--mono); font-size: 12.5px; }
 
   .verdict-banner {
-    margin-top: 18px;
-    border-radius: 12px;
-    padding: 16px 18px;
+    margin-top: 22px;
+    border-radius: 14px;
+    padding: 18px 20px;
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 16px;
+    flex-wrap: wrap;
     border: 1px solid var(--line);
+    background: var(--bg-raised);
   }
-  .verdict-banner.pass { background: var(--green-soft); border-color: color-mix(in srgb, var(--green) 35%, var(--card-border)); }
-  .verdict-banner.null { background: var(--amber-soft); border-color: color-mix(in srgb, var(--amber) 35%, var(--card-border)); }
-  .verdict-banner.tbd { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 30%, var(--card-border)); }
+  .verdict-banner.pass { border-color: color-mix(in srgb, var(--pass) 45%, var(--line)); }
+  .verdict-banner.null { border-color: color-mix(in srgb, var(--null) 45%, var(--line)); }
+  .verdict-banner.tbd { border-color: color-mix(in srgb, var(--other) 40%, var(--line)); }
   .verdict-pill {
     font-family: var(--mono);
     font-weight: 700;
-    font-size: 13px;
-    padding: 6px 12px;
+    font-size: 13.5px;
+    padding: 7px 14px;
     border-radius: 999px;
-    color: white;
     white-space: nowrap;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.03em;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
-  .verdict-pill.pass { background: var(--green); }
-  .verdict-pill.null { background: var(--amber); }
-  .verdict-pill.tbd { background: var(--accent); }
-  .verdict-text { font-size: 13.5px; color: var(--text); }
-  .verdict-text code { font-family: var(--mono); font-size: 12.5px; color: var(--text-muted); }
+  /* Light mode: solid "700-shade" fills need white text (all >=4.5:1, see
+     token comments above). Dark mode: bright "400-shade" fills need
+     near-black text instead — same contrast requirement, opposite text. */
+  .verdict-pill.pass { background: var(--pass); color: #ffffff; }
+  .verdict-pill.null { background: var(--null); color: #ffffff; }
+  .verdict-pill.tbd { background: var(--other); color: #ffffff; }
+  @media (prefers-color-scheme: dark) {
+    .verdict-pill.pass, .verdict-pill.null, .verdict-pill.tbd { color: #0c0d12; }
+  }
+  :root[data-theme="dark"] .verdict-pill.pass,
+  :root[data-theme="dark"] .verdict-pill.null,
+  :root[data-theme="dark"] .verdict-pill.tbd { color: #0c0d12; }
+  :root[data-theme="light"] .verdict-pill.pass,
+  :root[data-theme="light"] .verdict-pill.null,
+  :root[data-theme="light"] .verdict-pill.tbd { color: #ffffff; }
 
-  /* Audit badges */
-  .badge-strip {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
+  .verdict-text { font-size: 13.5px; color: var(--text); flex: 1; min-width: 220px; }
+  .verdict-text .crit { font-family: var(--mono); font-size: 12.5px; color: var(--text-muted); display: block; margin-top: 4px; }
+
+  /* ---- Badges (audit receipt) ---- */
+  .badge-strip { display: flex; flex-wrap: wrap; gap: 10px; }
   .badge {
     position: relative;
     display: inline-flex;
@@ -176,129 +231,240 @@
     border: 1px solid var(--line);
     cursor: default;
   }
-  .badge.pass { background: var(--green-soft); color: var(--green); border-color: color-mix(in srgb, var(--green) 30%, var(--card-border)); }
-  .badge.fail { background: var(--red-soft); color: var(--red); border-color: color-mix(in srgb, var(--red) 30%, var(--card-border)); }
-  .badge .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+  .badge.pass { background: var(--pass-soft); color: var(--pass); border-color: color-mix(in srgb, var(--pass) 35%, var(--line)); }
+  .badge.fail { background: var(--fail-soft); color: var(--fail); border-color: color-mix(in srgb, var(--fail) 35%, var(--line)); }
+  .badge .glyph { font-family: var(--mono); font-weight: 700; }
+  .badge .token { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.85; }
   .badge .tooltip {
     position: absolute;
-    bottom: calc(100% + 8px);
+    bottom: calc(100% + 9px);
     left: 50%;
     transform: translateX(-50%);
     background: var(--text);
     color: var(--bg);
     font-weight: 500;
     font-size: 12px;
-    line-height: 1.4;
-    padding: 9px 11px;
-    border-radius: 8px;
-    width: 240px;
+    line-height: 1.45;
+    padding: 10px 12px;
+    border-radius: 9px;
+    width: min(260px, 80vw);
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
-    transition: opacity 0.12s ease;
+    transition: opacity 0.15s var(--ease);
     z-index: 20;
     box-shadow: var(--shadow);
   }
-  .badge:hover .tooltip, .badge:focus-visible .tooltip { opacity: 1; }
+  .badge:hover .tooltip, .badge:focus-visible .tooltip, .badge.tt-open .tooltip { opacity: 1; visibility: visible; }
+  @media (prefers-reduced-motion: reduce) { .badge .tooltip { transition: none; } }
 
-  /* Grid layouts */
-  .grid-2 {
+  /* ---- Hero: honest vs leaky ---- */
+  .hero-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: stretch;
+    gap: 18px;
+    margin-top: 6px;
   }
-  @media (max-width: 860px) {
-    .grid-2 { grid-template-columns: 1fr; }
+  @media (max-width: 720px) { .hero-row { grid-template-columns: 1fr; } .hero-row .gap-divider { display: none; } }
+  .hero-stat {
+    padding: 18px 20px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    transition: opacity 0.2s var(--ease), border-color 0.2s var(--ease);
+  }
+  @media (prefers-reduced-motion: reduce) { .hero-stat { transition: none; } }
+  .hero-row:hover .hero-stat:not(:hover) { opacity: 0.55; }
+  .hero-stat.honest { background: var(--honest-soft); border-color: color-mix(in srgb, var(--honest) 40%, var(--line)); }
+  .hero-stat.leaky { background: var(--leaky-soft); border-color: color-mix(in srgb, var(--leaky) 40%, var(--line)); }
+  .hero-stat .tag { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; }
+  .hero-stat.honest .tag { color: var(--honest); }
+  .hero-stat.leaky .tag { color: var(--leaky); }
+  .hero-stat .sub { font-size: 12px; color: var(--text-muted); margin: 3px 0 12px; }
+  .hero-stat .ic { font-family: var(--mono); font-size: clamp(26px, 4vw, 34px); font-weight: 700; letter-spacing: -0.01em; }
+  .hero-stat .tstat { font-family: var(--mono); font-size: 13px; color: var(--text-muted); margin-top: 6px; }
+
+  .gap-divider {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 46px;
+    color: var(--text-faint);
+  }
+  .gap-divider .line { width: 0; flex: 1; min-height: 46px; border-left: 2px dashed var(--line-strong); }
+  .gap-divider .label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    white-space: nowrap;
   }
 
-  .chart-toolbar {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: 8px;
+  .hero-delta {
+    margin-top: 22px;
+    padding: 16px 20px;
+    border-radius: 14px;
+    border: 1px dashed var(--line-strong);
+    background: var(--bg-raised);
   }
+  .hero-delta .num {
+    font-family: var(--mono);
+    font-size: clamp(22px, 3.4vw, 30px);
+    font-weight: 700;
+    color: var(--text);
+  }
+  .hero-delta .caption { font-size: 13px; color: var(--text-muted); margin-top: 6px; max-width: 62ch; }
+
+  /* ---- Grid layouts ---- */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 28px 24px; }
+  @media (max-width: 860px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .panel { margin-top: 28px; }
+  .panel:first-of-type { margin-top: 22px; }
+
+  .chart-toolbar { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-bottom: 10px; min-height: 28px; }
   .toggle-btn {
     font-family: var(--font);
     font-size: 12px;
     font-weight: 600;
     color: var(--text-muted);
-    background: var(--bg);
+    background: var(--bg-raised);
     border: 1px solid var(--line);
     border-radius: 8px;
-    padding: 5px 10px;
+    padding: 5px 11px;
     cursor: pointer;
   }
-  .toggle-btn:hover { color: var(--text); border-color: var(--accent); }
-  .toggle-btn.active { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .toggle-btn:hover { color: var(--text); border-color: var(--line-strong); }
+  .toggle-btn[aria-pressed="true"] { color: var(--honest); border-color: var(--honest); background: var(--honest-soft); }
+  .toggle-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .toggle-note { font-size: 11.5px; color: var(--text-faint); }
 
   .chart-box { width: 100%; overflow-x: auto; }
   .plot { width: 100%; min-height: 320px; }
 
-  .stat-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 12px;
-    margin-top: 14px;
-  }
-  .stat-tile {
-    background: var(--bg);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 10px 12px;
-  }
-  .stat-tile .label { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em; }
-  .stat-tile .value { font-family: var(--mono); font-size: 16px; font-weight: 600; margin-top: 3px; }
+  .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 16px; }
+  .stat-tile { border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; background: var(--bg-raised); }
+  .stat-tile .label { font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-tile .value { font-family: var(--mono); font-size: 16px; font-weight: 600; margin-top: 4px; }
 
-  .fi-images {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-top: 14px;
-  }
-  @media (max-width: 700px) { .fi-images { grid-template-columns: 1fr; } }
-  .fi-images img {
-    width: 100%;
-    border-radius: 10px;
+  /* Framed light "paper" card, used ONLY for the matplotlib-exported PNGs
+     (they are drawn on white canvases and would sit as bare rectangles on
+     a dark page without a permanent light frame). */
+  .paper-frame {
+    background: var(--paper);
     border: 1px solid var(--line);
-    background: white;
-    display: block;
+    border-radius: 12px;
+    padding: 14px;
   }
-  .fi-images figcaption { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+  .fi-images { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  @media (max-width: 700px) { .fi-images { grid-template-columns: 1fr; } }
+  .fi-images img, .paper-frame img { width: 100%; border-radius: 8px; display: block; }
+  .fi-images figcaption { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
   figure { margin: 0; }
+
+  .ticker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px 14px;
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+  }
+  .ticker-cell { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+  .ticker-cell .t { color: var(--text-muted); }
+  .ticker-cell .v.pos { color: var(--honest); }
+  .ticker-cell .v.neg { color: var(--leaky); }
+
+  .cpcv-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 16px; }
 
   .empty-note {
     font-size: 13px;
     color: var(--text-faint);
-    padding: 26px 10px;
+    padding: 30px 12px;
     text-align: center;
     border: 1px dashed var(--line);
     border-radius: 10px;
   }
+  .empty-note.critical { color: var(--leaky); border-color: color-mix(in srgb, var(--leaky) 45%, var(--line)); text-align: left; padding: 20px; }
+  .empty-note code { font-family: var(--mono); background: var(--bg-raised); padding: 1px 5px; border-radius: 4px; }
+
+  .addendum-note {
+    font-size: 13px;
+    color: var(--text-muted);
+    border-left: 3px solid var(--null);
+    padding: 10px 16px;
+    margin: 4px 0 24px;
+    background: var(--null-soft);
+    border-radius: 0 8px 8px 0;
+  }
+
+  /* ---- Skeleton loader ---- */
+  .skeleton-block { border-radius: 12px; background: linear-gradient(100deg, var(--line) 20%, var(--bg-raised) 40%, var(--line) 60%); background-size: 220% 100%; animation: shimmer 1.5s ease-in-out infinite; }
+  @keyframes shimmer { 0% { background-position: 140% 0; } 100% { background-position: -40% 0; } }
+  @media (prefers-reduced-motion: reduce) { .skeleton-block { animation: none; background: var(--line); } }
+  .skel-h1 { height: 30px; width: 78%; margin-bottom: 14px; }
+  .skel-h1b { height: 30px; width: 52%; margin-bottom: 22px; }
+  .skel-banner { height: 64px; width: 100%; margin-bottom: 40px; }
+  .skel-row { height: 34px; width: 100%; border-radius: 999px; margin-bottom: 10px; }
+  .skel-chart { height: 320px; width: 100%; }
 
   footer {
-    margin-top: 40px;
-    padding-top: 20px;
+    margin-top: 64px;
+    padding-top: 22px;
     border-top: 1px solid var(--line);
     font-size: 12.5px;
     color: var(--text-faint);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 18px;
-    justify-content: space-between;
   }
+  .footer-links { display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: space-between; align-items: baseline; }
   footer a { color: var(--text-muted); text-decoration: none; }
-  footer a:hover { color: var(--accent); text-decoration: underline; }
+  footer a:hover { color: var(--honest); text-decoration: underline; }
+  .repro-strip {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--line);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px 20px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+  }
+  .repro-strip .k { color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; display: block; margin-bottom: 3px; }
+  .repro-strip .v { color: var(--text-muted); word-break: break-all; }
+
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="wrap">
+
+  <!-- Skeleton shown until results.json resolves -->
+  <div id="skeleton">
+    <div class="skeleton-block skel-h1"></div>
+    <div class="skeleton-block skel-h1b"></div>
+    <div class="skeleton-block skel-banner"></div>
+    <div class="skeleton-block skel-row" style="width:92%;"></div>
+    <div class="skeleton-block skel-row" style="width:70%;margin-bottom:36px;"></div>
+    <div class="skeleton-block skel-chart"></div>
+  </div>
+
+  <div id="app" hidden>
 
   <!-- 1. Header -->
-  <section>
-    <div class="card header-card">
+  <section id="section-header">
+    <div class="header-block">
       <p class="eyebrow">alpha-signal-lab — pre-registered research</p>
       <h1>Does gradient boosting on standard price/volume features add predictive power over plain momentum, under leakage-proof evaluation?</h1>
       <div id="verdict-banner" class="verdict-banner tbd">
         <span id="verdict-pill" class="verdict-pill tbd">TBD</span>
         <span id="verdict-text" class="verdict-text">Pipeline has not been run yet in this environment.</span>
+        <p id="momentum-callout" class="section-desc" style="display:none; margin-top:8px; font-weight:600;"></p>
       </div>
       <div class="meta-row">
         <span>Data span: <b id="meta-span">—</b></span>
@@ -310,98 +476,318 @@
   </section>
 
   <!-- 2. Audit badges -->
-  <section>
+  <section id="section-badges">
     <h2>Leakage audit receipt</h2>
-    <p class="section-desc">Eight pre-registered checks, run against a committed synthetic fixture in CI with no live network calls. Hover a badge for what it verifies.</p>
-    <div class="card">
-      <div id="badge-strip" class="badge-strip"></div>
-    </div>
+    <p class="section-desc">Eight pre-registered checks, run against a committed synthetic fixture in CI with no live network calls. Hover or tap a badge for what it verifies.</p>
+    <div id="badge-strip" class="badge-strip"></div>
   </section>
 
-  <!-- 3. Equity curve -->
-  <section>
-    <h2>Long-short equity curve</h2>
-    <p class="section-desc">5-day rebalance, equal-weight top-3 long / bottom-3 short, model vs 12-1 momentum rank vs equal-weight buy-and-hold.</p>
-    <div class="card">
-      <div class="chart-toolbar">
-        <button id="log-toggle" class="toggle-btn">Log scale</button>
-      </div>
-      <div id="equity-chart" class="chart-box"><div id="equity-plot" class="plot"></div></div>
-    </div>
-  </section>
+  <div class="rule-gap" aria-hidden="true"><span class="seg"></span><span class="tag">purge + embargo</span><span class="seg"></span></div>
 
-  <!-- 4. Rolling IC -->
-  <section>
-    <div class="grid-2">
-      <div class="card">
-        <h2>Rolling 63-day mean rank IC</h2>
-        <p class="section-desc">Daily cross-sectional Spearman rank IC, smoothed. Threshold line at the pre-registered 0.02 bar.</p>
-        <div class="chart-box"><div id="rolling-ic-plot" class="plot"></div></div>
-      </div>
-      <div class="card">
-        <h2>Per-fold mean rank IC</h2>
-        <p class="section-desc">One LightGBM model per walk-forward fold; bars show that fold's mean OOS rank IC.</p>
-        <div class="chart-box"><div id="fold-ic-plot" class="plot"></div></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- 5. Honest vs leaky -->
-  <section>
+  <!-- 3. Hero: honest vs leaky -->
+  <section id="section-hero">
     <h2>Honest vs leaky: the headline chart</h2>
     <p class="section-desc">Identical features, target, model, and hyperparameters. Only the cross-validation changes: PurgedWalkForward (honest) vs naive random 5-fold shuffled CV with no purge or embargo (leaky twin). The gap is pure leakage.</p>
-    <div class="card">
-      <div class="chart-box"><div id="leaky-plot" class="plot"></div></div>
+    <div id="hero-row" class="hero-row">
+      <div class="hero-stat honest" tabindex="0">
+        <div class="tag">Honest — PurgedWalkForward</div>
+        <div class="sub">purged, embargoed, walk-forward OOS</div>
+        <div class="ic mono" id="hero-honest-ic">—</div>
+        <div class="tstat" id="hero-honest-tstat">NW t-stat —</div>
+      </div>
+      <div class="gap-divider" aria-hidden="true">
+        <span class="line"></span>
+        <span class="label">gap</span>
+        <span class="line"></span>
+      </div>
+      <div class="hero-stat leaky" tabindex="0">
+        <div class="tag">Leaky twin — shuffled 5-fold</div>
+        <div class="sub">no purge, no embargo, same everything else</div>
+        <div class="ic mono" id="hero-leaky-ic">—</div>
+        <div class="tstat" id="hero-leaky-tstat">NW t-stat —</div>
+      </div>
+    </div>
+    <div class="hero-delta">
+      <div class="num mono" id="hero-delta-num">Δ TBD</div>
+      <p class="caption" id="hero-delta-caption">Delta between the two mean rank ICs above, computed from the live numbers once both sides are available.</p>
+    </div>
+    <div class="panel">
+      <div id="leaky-chart" class="chart-box"><div id="leaky-plot" class="plot"></div></div>
       <div class="stat-row" id="leaky-stats"></div>
     </div>
   </section>
 
+  <!-- 4. Equity curve -->
+  <section id="section-equity">
+    <h2>Long-short equity curve</h2>
+    <p class="section-desc">5-day rebalance, equal-weight top-3 long / bottom-3 short, model vs 12-1 momentum rank vs equal-weight buy-and-hold.</p>
+    <div class="chart-toolbar">
+      <span class="toggle-note" id="log-toggle-note"></span>
+      <button id="log-toggle" class="toggle-btn" aria-pressed="false">Log scale</button>
+    </div>
+    <div id="equity-chart" class="chart-box"><div id="equity-plot" class="plot"></div></div>
+  </section>
+
+  <!-- 5. Rolling IC + per-fold IC -->
+  <section id="section-ic">
+    <div class="grid-2">
+      <div>
+        <h2>Rolling 63-day mean rank IC</h2>
+        <p class="section-desc">Daily cross-sectional Spearman rank IC, smoothed. The dashed line and label mark the pre-registered 0.02 bar.</p>
+        <div id="rolling-ic-chart" class="chart-box"><div id="rolling-ic-plot" class="plot"></div></div>
+      </div>
+      <div>
+        <h2>Per-fold mean rank IC</h2>
+        <p class="section-desc">One LightGBM model per walk-forward fold; bars show that fold's mean OOS rank IC. Gray bars mean no data for that fold, not a measured zero.</p>
+        <div id="fold-ic-chart" class="chart-box"><div id="fold-ic-plot" class="plot"></div></div>
+      </div>
+    </div>
+  </section>
+
   <!-- 6. Feature importance -->
-  <section>
+  <section id="section-fi">
     <h2>Feature importance</h2>
     <p class="section-desc">SHAP on the final (most recent) fold's model, computed on that fold's OOS test rows only. Stability heatmap shows fold-to-fold rank churn (1 = most important).</p>
     <div class="grid-2">
-      <div class="card">
-        <h3 style="margin:0 0 10px;font-size:14px;">Mean |SHAP| (final fold)</h3>
-        <div class="chart-box"><div id="shap-bar-plot" class="plot" style="min-height:280px;"></div></div>
+      <div>
+        <h3>Mean |SHAP| (final fold)</h3>
+        <div id="shap-bar-chart" class="chart-box"><div id="shap-bar-plot" class="plot" style="min-height:280px;"></div></div>
       </div>
-      <div class="card">
-        <h3 style="margin:0 0 10px;font-size:14px;">Per-fold feature-rank stability</h3>
+      <div>
+        <h3>Per-fold feature-rank stability</h3>
         <div id="stability-img-wrap"></div>
       </div>
     </div>
-    <div class="card" style="margin-top:20px;">
-      <h3 style="margin:0 0 10px;font-size:14px;">SHAP plots (from explain.py)</h3>
+    <div class="panel">
+      <h3>SHAP plots (from explain.py)</h3>
       <div class="fi-images" id="shap-images"></div>
     </div>
   </section>
 
-  <!-- 7. Footer -->
+  <div class="rule-gap" aria-hidden="true"><span class="seg"></span><span class="tag">post-hoc addendum</span><span class="seg"></span></div>
+
+  <!-- 7. Addendum intro -->
+  <section id="section-addendum-intro">
+    <h2>Supplementary analyses</h2>
+    <p class="section-desc" id="addendum-note">Everything below was computed after the primary pre-registered verdict above was sealed. These are diagnostic/robustness checks, not a re-run or reframing of the primary result.</p>
+  </section>
+
+  <!-- 8. Neutralization -->
+  <section id="section-neutralization">
+    <h2>Feature neutralization vs 12-1 momentum</h2>
+    <p class="section-desc" id="neut-desc">Does the model add anything orthogonal to plain momentum? Rank IC of raw predictions vs predictions cross-sectionally residualized against 12-1 momentum.</p>
+    <div id="neut-chart" class="chart-box"><div id="neut-plot" class="plot" style="min-height:240px;"></div></div>
+    <div class="stat-row" id="neut-stats"></div>
+    <p class="section-desc" id="neut-verdict" style="margin-top:14px;"></p>
+  </section>
+
+  <!-- 9. Regime + per-ticker -->
+  <section id="section-regime">
+    <h2>Regime and per-ticker breakdown</h2>
+    <p class="section-desc" id="regime-desc">Rank IC split by realized-volatility regime (median split on trailing 21-day realized volatility), plus per-ticker time-series IC across the universe.</p>
+    <div id="regime-chart" class="chart-box"><div id="regime-plot" class="plot" style="min-height:240px;"></div></div>
+    <h3 style="margin-top:24px;">Per-ticker rank IC</h3>
+    <div class="ticker-grid" id="ticker-grid"></div>
+    <p class="section-desc" id="ticker-note" style="margin-top:12px;"></p>
+  </section>
+
+  <!-- 10. Rolling SHAP over time -->
+  <section id="section-shap-time">
+    <h2>Rolling per-fold SHAP importance over time</h2>
+    <p class="section-desc" id="shap-time-desc">Mean |SHAP| per feature, one line per feature, across all walk-forward folds, how importance ranks drift over time rather than a single snapshot.</p>
+    <div id="shap-time-chart" class="chart-box"><div id="shap-time-plot" class="plot"></div></div>
+  </section>
+
+  <!-- 11. CPCV -->
+  <section id="section-cpcv">
+    <h2>CPCV: a distribution instead of one path</h2>
+    <p class="section-desc" id="cpcv-desc">Combinatorial Purged Cross-Validation: the same frozen model refit across many purged/embargoed train/test path combinations, giving a distribution of OOS rank IC instead of the single walk-forward realization above.</p>
+    <div id="cpcv-chart" class="chart-box"><div id="cpcv-plot" class="plot" style="min-height:200px;"></div></div>
+    <div class="cpcv-stats" id="cpcv-stats"></div>
+    <p class="section-desc" id="cpcv-pbo-note" style="margin-top:14px;"></p>
+  </section>
+
+  <!-- 12. Footer -->
   <footer>
-    <span>alpha-signal-lab — research methodology, not investment advice.</span>
-    <span>
-      <a href="../REPORT.md">Full REPORT.md</a> &middot;
-      <a href="../specs/methodology.md">Pre-registered methodology</a>
-    </span>
+    <div class="footer-links">
+      <span>alpha-signal-lab — research methodology, not investment advice.</span>
+      <span>
+        <a id="footer-report-link" href="#">Full REPORT.md</a> &middot;
+        <a id="footer-methodology-link" href="#">Pre-registered methodology</a>
+      </span>
+    </div>
+    <div class="repro-strip" id="repro-strip" aria-label="Reproducibility manifest"></div>
   </footer>
 
+  </div>
 </div>
 
 <script>
 (function () {
-  const PALETTE = {
-    model: getVar('--accent'),
-    momentum: '#8b6dd6',
-    buyhold: getVar('--text-faint'),
-    honest: getVar('--green'),
-    leaky: getVar('--red'),
-    grid: getVar('--chart-grid'),
-    text: getVar('--text-muted'),
-    line: getVar('--line'),
-  };
+  'use strict';
+
+  var REPO_BLOB_BASE = 'https://github.com/aleks-drozy/alpha-signal-lab/blob/main/';
+  var HOSTED_URL = 'https://aleks-drozy.github.io/alpha-signal-lab/';
+  var THRESHOLD_IC = 0.02;
+
+  /* ---------------- generic helpers ---------------- */
 
   function getVar(name) {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+    });
+  }
+
+  function isNum(x) {
+    return typeof x === 'number' && !Number.isNaN(x) && Number.isFinite(x);
+  }
+
+  function fmtPct(x, digits) {
+    if (!isNum(x)) return 'TBD';
+    return (x * 100).toFixed(digits === undefined ? 2 : digits) + '%';
+  }
+  function fmtNum(x, digits) {
+    if (!isNum(x)) return 'TBD';
+    return Number(x).toFixed(digits === undefined ? 3 : digits);
+  }
+  function fmtSigned(x, digits) {
+    if (!isNum(x)) return 'TBD';
+    var v = Number(x);
+    var s = v.toFixed(digits === undefined ? 4 : digits);
+    return (v >= 0 ? '+' : '') + s;
+  }
+
+  function plotlyOk() { return typeof Plotly !== 'undefined' && Plotly && typeof Plotly.newPlot === 'function'; }
+
+  /* Plotly writes fillcolor straight onto an SVG fill attribute, which does
+     not reliably resolve CSS color-mix()/color functions the way a
+     stylesheet does. getComputedStyle resolves our CSS vars to rgb(...)/
+     #hex already, so blend alpha numerically instead of via CSS syntax. */
+  function alphaColor(cssColor, alpha) {
+    var probe = document.createElement('span');
+    probe.style.color = cssColor;
+    document.body.appendChild(probe);
+    var rgb = getComputedStyle(probe).color;
+    document.body.removeChild(probe);
+    var m = /rgba?\(([^)]+)\)/.exec(rgb);
+    if (!m) return cssColor;
+    var parts = m[1].split(',').slice(0, 3).map(function (s) { return s.trim(); });
+    return 'rgba(' + parts.join(',') + ',' + alpha + ')';
+  }
+
+  function emptyChart(divId, message, critical) {
+    var el = document.getElementById(divId);
+    if (!el || !el.parentElement) return;
+    el.parentElement.innerHTML = '<div class="empty-note' + (critical ? ' critical' : '') + '">' + message + '</div>';
+  }
+
+  function setChartAria(containerId, label) {
+    var el = document.getElementById(containerId);
+    if (!el) return;
+    el.setAttribute('role', 'img');
+    el.setAttribute('aria-label', label);
+  }
+
+  /* withPlotly: guards a single chart render so a CDN failure degrades that
+     one chart, not the whole page (bug fix #2). */
+  function withPlotly(plotDivId, fn) {
+    if (!plotlyOk()) {
+      emptyChart(plotDivId, 'Chart library did not load from the CDN (offline, or cdn.plot.ly blocked). The numbers around this chart are still accurate.', true);
+      return false;
+    }
+    try {
+      fn();
+      return true;
+    } catch (e) {
+      emptyChart(plotDivId, 'This chart failed to render (' + escapeHtml(String(e && e.message || e)) + ').', true);
+      return false;
+    }
+  }
+
+  async function loadJSON(path) {
+    try {
+      var res = await fetch(path, { cache: 'no-store' });
+      if (!res.ok) return { ok: false, status: res.status };
+      var data = await res.json();
+      return { ok: true, data: data };
+    } catch (e) {
+      return { ok: false, error: e };
+    }
+  }
+
+  /* count-up animation, ease-out-quart, respects prefers-reduced-motion */
+  function countUp(el, target, digits, prefix, suffix) {
+    if (!el || !isNum(target)) return;
+    prefix = prefix || ''; suffix = suffix || '';
+    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced) { el.textContent = prefix + fmtNum(target, digits) + suffix; return; }
+    var duration = 900;
+    var start = null;
+    function frame(ts) {
+      if (start === null) start = ts;
+      var t = Math.min(1, (ts - start) / duration);
+      var eased = 1 - Math.pow(1 - t, 4);
+      el.textContent = prefix + (target * eased).toFixed(digits) + suffix;
+      if (t < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------------- tooltip wiring (touch + keyboard + clamped) ---------------- */
+
+  function wireTooltip(trigger, tooltip, idx) {
+    var id = 'tt-' + idx;
+    tooltip.id = id;
+    tooltip.setAttribute('role', 'tooltip');
+    trigger.setAttribute('aria-describedby', id);
+
+    function clamp() {
+      tooltip.style.left = '50%';
+      tooltip.style.transform = 'translateX(-50%)';
+      var rect = tooltip.getBoundingClientRect();
+      var vw = window.innerWidth;
+      var overflowRight = rect.right - vw + 8;
+      var overflowLeft = -rect.left + 8;
+      if (overflowRight > 0) tooltip.style.transform = 'translateX(calc(-50% - ' + overflowRight + 'px))';
+      else if (overflowLeft > 0) tooltip.style.transform = 'translateX(calc(-50% + ' + overflowLeft + 'px))';
+    }
+
+    trigger.addEventListener('mouseenter', clamp);
+    trigger.addEventListener('focus', clamp);
+    trigger.addEventListener('touchstart', function (e) {
+      var isOpen = trigger.classList.contains('tt-open');
+      document.querySelectorAll('.tt-open').forEach(function (n) { n.classList.remove('tt-open'); });
+      if (!isOpen) { trigger.classList.add('tt-open'); clamp(); }
+      e.stopPropagation();
+    }, { passive: true });
+  }
+
+  document.addEventListener('touchstart', function (e) {
+    if (!e.target.closest('.badge')) {
+      document.querySelectorAll('.tt-open').forEach(function (n) { n.classList.remove('tt-open'); });
+    }
+  }, { passive: true });
+
+  /* ---------------- palette (rebuilt on theme change, bug fix #11) ---------------- */
+
+  var PALETTE = null;
+  function buildPalette() {
+    return {
+      honest: getVar('--honest'),
+      leaky: getVar('--leaky'),
+      pass: getVar('--pass'),
+      fail: getVar('--fail'),
+      nullc: getVar('--null'),
+      other: getVar('--other'),
+      buyhold: getVar('--text-faint'),
+      grid: getVar('--chart-grid'),
+      text: getVar('--text-muted'),
+      line: getVar('--line-strong'),
+    };
   }
 
   function baseLayout(extra) {
@@ -412,163 +798,144 @@
       margin: { l: 48, r: 16, t: 8, b: 40 },
       xaxis: { gridcolor: PALETTE.grid, zeroline: false },
       yaxis: { gridcolor: PALETTE.grid, zeroline: false },
-      legend: { orientation: 'h', y: -0.18 },
+      legend: { orientation: 'h', y: -0.2, font: { color: PALETTE.text } },
       hovermode: 'x unified',
     }, extra || {});
   }
+  var plotConfig = { responsive: true, displayModeBar: false };
 
-  const plotConfig = { responsive: true, displayModeBar: false };
+  var FEATURE_LINE_COLORS = ['#6366f1', '#0891b2', '#7c3aed', '#db2777', '#65a30d', '#0284c7',
+    '#ea580c', '#9333ea', '#0d9488', '#4f46e5', '#b45309', '#475569'];
 
-  function fmtPct(x, digits) {
-    if (x === null || x === undefined || Number.isNaN(x)) return 'TBD';
-    return (x * 100).toFixed(digits === undefined ? 2 : digits) + '%';
-  }
-  function fmtNum(x, digits) {
-    if (x === null || x === undefined || Number.isNaN(x)) return 'TBD';
-    return Number(x).toFixed(digits === undefined ? 3 : digits);
-  }
-
-  function emptyChart(divId, message) {
-    const el = document.getElementById(divId);
-    el.parentElement.innerHTML = '<div class="empty-note">' + message + '</div>';
-  }
-
-  async function loadJSON(path) {
-    try {
-      const res = await fetch(path);
-      if (!res.ok) return null;
-      return await res.json();
-    } catch (e) {
-      return null;
-    }
-  }
+  /* ============================================================
+     Renderers
+     ============================================================ */
 
   function renderHeader(results) {
-    const verdict = results.verdict || {};
-    const banner = document.getElementById('verdict-banner');
-    const pill = document.getElementById('verdict-pill');
-    const text = document.getElementById('verdict-text');
+    var verdict = results.verdict || {};
+    var banner = document.getElementById('verdict-banner');
+    var pill = document.getElementById('verdict-pill');
+    var text = document.getElementById('verdict-text');
+    var cmp = results.ic_comparison || {};
 
-    let cls = 'tbd', label = 'TBD', msg = 'Pipeline has not been run yet in this environment.';
-    if (verdict.met === true) {
-      cls = 'pass'; label = 'PASS';
-      msg = 'Criterion met: mean rank IC ' + fmtNum(results.ic_comparison && results.ic_comparison.honest_mean_ic, 4) +
-        ' (threshold ' + verdict.ic_threshold + '), NW t-stat ' +
-        fmtNum(results.ic_comparison && results.ic_comparison.honest_tstat, 2) + ' (threshold ' + verdict.tstat_threshold + ').';
-    } else if (verdict.met === false) {
-      cls = 'null'; label = 'NULL';
-      msg = 'Criterion not met: mean rank IC ' + fmtNum(results.ic_comparison && results.ic_comparison.honest_mean_ic, 4) +
-        ' (threshold ' + verdict.ic_threshold + '), NW t-stat ' +
-        fmtNum(results.ic_comparison && results.ic_comparison.honest_tstat, 2) + ' (threshold ' + verdict.tstat_threshold + '). Reported honestly, not reframed.';
-    }
+    var cls = 'tbd', label = 'TBD', msg = 'Pipeline has not been run yet in this environment.';
+    if (verdict.met === true) { cls = 'pass'; label = 'PASS'; }
+    else if (verdict.met === false) { cls = 'null'; label = 'NULL'; }
     banner.className = 'verdict-banner ' + cls;
     pill.className = 'verdict-pill ' + cls;
-    pill.textContent = label;
-    text.innerHTML = msg;
 
-    const span = results.data_span || {};
-    document.getElementById('meta-span').textContent = (span.ingest_start || '—') + ' → latest';
+    if (verdict.met === true || verdict.met === false) {
+      var icTxt = fmtNum(cmp.honest_mean_ic, 4);
+      var tTxt = fmtNum(cmp.honest_tstat, 2);
+      text.innerHTML = (verdict.met ? 'Criterion met: ' : 'Criterion not met: ') +
+        'mean rank IC <span class="mono" id="verdict-ic-num">' + escapeHtml(icTxt) + '</span> ' +
+        '(threshold ' + escapeHtml(fmtNum(verdict.ic_threshold, 2)) + '), NW t-stat ' +
+        '<span class="mono">' + escapeHtml(tTxt) + '</span> (threshold ' + escapeHtml(fmtNum(verdict.tstat_threshold, 1)) + ').' +
+        '<code class="crit">mean(rank IC) &gt; ' + escapeHtml(fmtNum(verdict.ic_threshold, 2)) + '  AND  NW t-stat &gt; ' + escapeHtml(fmtNum(verdict.tstat_threshold, 1)) + '</code>' +
+        (verdict.met ? '' : ' Reported honestly, not reframed.');
+      pill.textContent = label;
+      var numEl = document.getElementById('verdict-ic-num');
+      if (numEl && isNum(cmp.honest_mean_ic)) countUp(numEl, cmp.honest_mean_ic, 4);
+      var momEl = document.getElementById('momentum-callout');
+      if (momEl) {
+        if (results.momentum_clears_bar === true) {
+          momEl.textContent = 'The no-model 12-1 momentum baseline itself clears the pre-registered bar, while this model does not: the honest headline, not a footnote.';
+          momEl.style.display = '';
+        } else {
+          momEl.style.display = 'none';
+        }
+      }
+    } else {
+      pill.textContent = label;
+      text.textContent = msg;
+    }
+
+    var span = results.data_span || {};
+    var endDate = (span.oos_date_range && span.oos_date_range[1]) || null;
+    document.getElementById('meta-span').textContent = (span.ingest_start || '—') + ' → ' + (endDate || 'latest');
     document.getElementById('meta-oos').textContent = span.oos_date_range ? (span.oos_date_range[0] + ' → ' + span.oos_date_range[1]) : 'not yet run';
     document.getElementById('meta-run').textContent = results.generated_at ? new Date(results.generated_at).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '—';
+    if (isNum(verdict.ic_threshold) && isNum(verdict.tstat_threshold)) {
+      document.getElementById('meta-criterion').textContent = 'mean rank IC > ' + verdict.ic_threshold + ' and NW t-stat > ' + verdict.tstat_threshold;
+    }
   }
 
   function renderBadges(badges) {
-    const strip = document.getElementById('badge-strip');
+    var strip = document.getElementById('badge-strip');
     if (!badges || badges.length === 0) {
       strip.innerHTML = '<div class="empty-note" style="flex:1;">No audit run recorded yet. Run <code>pytest tests/test_leakage_audit.py</code>.</div>';
       return;
     }
-    strip.innerHTML = badges.map(function (b) {
-      const cls = b.passed ? 'pass' : 'fail';
-      const label = b.test.replace(/_/g, ' ');
-      return '<span class="badge ' + cls + '" tabindex="0">' +
-        '<span class="dot"></span>' + label +
-        '<span class="tooltip">' + b.description + '</span></span>';
+    strip.innerHTML = badges.map(function (b, i) {
+      var cls = b.passed ? 'pass' : 'fail';
+      var glyph = b.passed ? '✓' : '✕';
+      var token = b.passed ? 'PASS' : 'FAIL';
+      var label = escapeHtml(String(b.test || '').replace(/_/g, ' '));
+      var desc = escapeHtml(b.description || '');
+      return '<span class="badge ' + cls + '" tabindex="0" data-idx="' + i + '">' +
+        '<span class="glyph" aria-hidden="true">' + glyph + '</span>' +
+        '<span class="token">' + token + '</span> ' + label +
+        '<span class="tooltip">' + desc + '</span></span>';
     }).join('');
-  }
-
-  function renderEquityCurve(results) {
-    const eq = results.equity_curves || {};
-    if (!eq.dates || eq.dates.length === 0) {
-      emptyChart('equity-plot', 'No equity curve yet: run python -m alpha_lab.run_all to populate this chart.');
-      document.getElementById('log-toggle').style.display = 'none';
-      return;
-    }
-    const traces = [
-      { x: eq.dates, y: eq.model_gross, name: 'Model (gross)', line: { color: PALETTE.model, width: 2.5 } },
-      { x: eq.dates, y: eq.model_net, name: 'Model (net)', line: { color: PALETTE.model, width: 1.5, dash: 'dot' } },
-      { x: eq.dates, y: eq.momentum_gross, name: '12-1 momentum', line: { color: PALETTE.momentum, width: 1.75 } },
-      { x: eq.dates, y: eq.buy_hold_gross, name: 'Buy & hold', line: { color: PALETTE.buyhold, width: 1.5, dash: 'dash' } },
-    ];
-    let logScale = false;
-    function draw() {
-      const layout = baseLayout({ yaxis: { gridcolor: PALETTE.grid, zeroline: false, type: logScale ? 'log' : 'linear', title: 'Cumulative growth of $1' } });
-      Plotly.react('equity-plot', traces, layout, plotConfig);
-    }
-    draw();
-    document.getElementById('log-toggle').addEventListener('click', function () {
-      logScale = !logScale;
-      this.classList.toggle('active', logScale);
-      draw();
+    strip.querySelectorAll('.badge').forEach(function (badge, i) {
+      var tooltip = badge.querySelector('.tooltip');
+      if (tooltip) wireTooltip(badge, tooltip, i);
     });
   }
 
-  function renderRollingIC(results) {
-    const r = results.rolling_ic || {};
-    if (!r.dates || r.dates.length === 0) {
-      emptyChart('rolling-ic-plot', 'No IC series yet.');
-      return;
-    }
-    const traces = [
-      { x: r.dates, y: r.values, name: 'Rolling 63d mean IC', line: { color: PALETTE.model, width: 2 }, fill: 'tozeroy', fillcolor: PALETTE.model + '22' },
-    ];
-    const layout = baseLayout({
-      shapes: [
-        { type: 'line', x0: r.dates[0], x1: r.dates[r.dates.length - 1], y0: 0, y1: 0, line: { color: PALETTE.line, width: 1 } },
-        { type: 'line', x0: r.dates[0], x1: r.dates[r.dates.length - 1], y0: 0.02, y1: 0.02, line: { color: PALETTE.leaky, width: 1, dash: 'dash' } },
-      ],
-      yaxis: { gridcolor: PALETTE.grid, zeroline: false, title: 'Rank IC' },
-      showlegend: false,
-    });
-    Plotly.newPlot('rolling-ic-plot', traces, layout, plotConfig);
+  function heroSummary(cmp) {
+    if (!isNum(cmp.honest_mean_ic) && !isNum(cmp.leaky_mean_ic)) return 'Honest vs leaky IC comparison: no data yet.';
+    return 'Bar chart comparing honest mean rank IC ' + fmtNum(cmp.honest_mean_ic, 4) +
+      ' against leaky-twin mean rank IC ' + fmtNum(cmp.leaky_mean_ic, 4) + '.';
   }
 
-  function renderFoldIC(results) {
-    const folds = results.per_fold_ic || [];
-    if (folds.length === 0) {
-      emptyChart('fold-ic-plot', 'No per-fold data yet.');
-      return;
-    }
-    const trace = {
-      x: folds.map(function (f) { return 'fold ' + f.fold_id; }),
-      y: folds.map(function (f) { return f.mean_ic; }),
-      type: 'bar',
-      marker: { color: folds.map(function (f) { return f.mean_ic >= 0 ? PALETTE.model : PALETTE.leaky; }) },
-      text: folds.map(function (f) { return f.test_start + ' to ' + f.test_end; }),
-      hovertemplate: '%{x}<br>mean IC %{y:.4f}<br>%{text}<extra></extra>',
-    };
-    const layout = baseLayout({ yaxis: { gridcolor: PALETTE.grid, zeroline: true, title: 'Mean rank IC' }, showlegend: false });
-    Plotly.newPlot('fold-ic-plot', [trace], layout, plotConfig);
-  }
+  function renderHero(results) {
+    var cmp = results.ic_comparison || {};
+    var hasHonest = isNum(cmp.honest_mean_ic);
+    var hasLeaky = isNum(cmp.leaky_mean_ic);
 
-  function renderLeakyComparison(results) {
-    const cmp = results.ic_comparison || {};
-    const hasHonest = cmp.honest_mean_ic !== null && cmp.honest_mean_ic !== undefined;
-    const hasLeaky = cmp.leaky_mean_ic !== null && cmp.leaky_mean_ic !== undefined;
+    document.getElementById('hero-honest-ic').textContent = fmtNum(cmp.honest_mean_ic, 4);
+    document.getElementById('hero-honest-tstat').textContent = 'NW t-stat ' + fmtNum(cmp.honest_tstat, 2);
+    document.getElementById('hero-leaky-ic').textContent = fmtNum(cmp.leaky_mean_ic, 4);
+    document.getElementById('hero-leaky-tstat').textContent = 'NW t-stat ' + fmtNum(cmp.leaky_tstat, 2);
+
+    var deltaNum = document.getElementById('hero-delta-num');
+    var deltaCap = document.getElementById('hero-delta-caption');
+    if (hasHonest && hasLeaky) {
+      var delta = cmp.leaky_mean_ic - cmp.honest_mean_ic;
+      deltaNum.textContent = fmtSigned(delta, 4) + ' rank IC';
+      deltaCap.textContent = fmtSigned(delta, 2) + ' of the apparent edge in the leaky-twin CV was pure leakage: same features, target, model, and hyperparameters, only the split changed.';
+    } else {
+      deltaNum.textContent = 'Δ TBD';
+      deltaCap.textContent = 'Comparison incomplete: at least one side has not been computed yet.';
+    }
+
     if (!hasHonest && !hasLeaky) {
       emptyChart('leaky-plot', 'No comparison yet: run evaluate and leaky_twin.');
+      document.getElementById('leaky-stats').innerHTML = '';
       return;
     }
-    const trace = {
-      x: ['Honest (PurgedWalkForward)', 'Leaky twin (shuffled 5-fold)'],
-      y: [hasHonest ? cmp.honest_mean_ic : 0, hasLeaky ? cmp.leaky_mean_ic : 0],
-      type: 'bar',
-      marker: { color: [PALETTE.honest, PALETTE.leaky] },
-      text: [hasHonest ? fmtNum(cmp.honest_mean_ic, 4) : 'TBD', hasLeaky ? fmtNum(cmp.leaky_mean_ic, 4) : 'TBD'],
-      textposition: 'outside',
-    };
-    const layout = baseLayout({ yaxis: { gridcolor: PALETTE.grid, zeroline: true, title: 'Mean daily rank IC' }, showlegend: false, margin: { l: 48, r: 16, t: 8, b: 60 } });
-    Plotly.newPlot('leaky-plot', [trace], layout, plotConfig);
+
+    setChartAria('leaky-chart', heroSummary(cmp));
+    withPlotly('leaky-plot', function () {
+      var xs = ['Honest (PurgedWalkForward)', 'Leaky twin (shuffled 5-fold)'];
+      var ys = [hasHonest ? cmp.honest_mean_ic : null, hasLeaky ? cmp.leaky_mean_ic : null];
+      var colors = [PALETTE.honest, PALETTE.leaky];
+      var texts = [hasHonest ? fmtNum(cmp.honest_mean_ic, 4) : 'no data', hasLeaky ? fmtNum(cmp.leaky_mean_ic, 4) : 'no data'];
+      var trace = {
+        x: xs, y: ys, type: 'bar',
+        marker: { color: colors },
+        text: texts, textposition: 'outside',
+      };
+      var annotations = [];
+      if (!hasHonest) annotations.push({ x: xs[0], y: 0, text: 'no data', showarrow: false, yshift: 14, font: { color: PALETTE.text } });
+      if (!hasLeaky) annotations.push({ x: xs[1], y: 0, text: 'no data', showarrow: false, yshift: 14, font: { color: PALETTE.text } });
+      var layout = baseLayout({
+        yaxis: { gridcolor: PALETTE.grid, zeroline: true, title: 'Mean daily rank IC' },
+        showlegend: false, margin: { l: 48, r: 16, t: 8, b: 60 }, annotations: annotations,
+      });
+      Plotly.newPlot('leaky-plot', [trace], layout, plotConfig);
+    });
 
     document.getElementById('leaky-stats').innerHTML = [
       { label: 'Honest mean IC', value: fmtNum(cmp.honest_mean_ic, 4) },
@@ -576,40 +943,149 @@
       { label: 'Leaky mean IC', value: fmtNum(cmp.leaky_mean_ic, 4) },
       { label: 'Leaky NW t-stat', value: fmtNum(cmp.leaky_tstat, 2) },
     ].map(function (s) {
-      return '<div class="stat-tile"><div class="label">' + s.label + '</div><div class="value">' + s.value + '</div></div>';
+      return '<div class="stat-tile"><div class="label">' + escapeHtml(s.label) + '</div><div class="value">' + escapeHtml(s.value) + '</div></div>';
     }).join('');
   }
 
+  function renderEquityCurve(results) {
+    var eq = results.equity_curves || {};
+    var toggle = document.getElementById('log-toggle');
+    var note = document.getElementById('log-toggle-note');
+    if (!eq.dates || eq.dates.length === 0) {
+      emptyChart('equity-plot', 'No equity curve yet: run python -m alpha_lab.run_all to populate this chart.');
+      toggle.style.display = 'none';
+      return;
+    }
+    var series = [eq.model_gross, eq.model_net, eq.momentum_gross, eq.buy_hold_gross];
+    var hasNonPositive = series.some(function (s) { return (s || []).some(function (v) { return isNum(v) && v <= 0; }); });
+    if (hasNonPositive) {
+      toggle.disabled = true;
+      toggle.title = 'Log scale disabled: at least one series touches zero or goes negative.';
+      note.textContent = 'Log scale unavailable (a series is non-positive).';
+    }
+
+    setChartAria('equity-chart', 'Line chart of cumulative growth of $1 for the model (gross and net), 12-1 momentum, and buy-and-hold, from ' + eq.dates[0] + ' to ' + eq.dates[eq.dates.length - 1] + '.');
+
+    var logScale = false;
+    function draw() {
+      withPlotly('equity-plot', function () {
+        var traces = [
+          { x: eq.dates, y: eq.model_gross, name: 'Model (gross)', line: { color: PALETTE.honest, width: 2.5 } },
+          { x: eq.dates, y: eq.model_net, name: 'Model (net)', line: { color: PALETTE.honest, width: 1.5, dash: 'dot' } },
+          { x: eq.dates, y: eq.momentum_gross, name: '12-1 momentum', line: { color: PALETTE.other, width: 1.75 } },
+          { x: eq.dates, y: eq.buy_hold_gross, name: 'Buy & hold', line: { color: PALETTE.buyhold, width: 1.5, dash: 'dash' } },
+        ];
+        var layout = baseLayout({ yaxis: { gridcolor: PALETTE.grid, zeroline: false, type: (logScale && !hasNonPositive) ? 'log' : 'linear', title: 'Cumulative growth of $1' } });
+        Plotly.react('equity-plot', traces, layout, plotConfig);
+      });
+    }
+    draw();
+    if (!hasNonPositive) {
+      // assign onclick (not addEventListener) so a theme-change re-render replaces
+      // the handler instead of stacking a new one on the same persistent DOM node
+      toggle.onclick = function () {
+        logScale = !logScale;
+        toggle.setAttribute('aria-pressed', String(logScale));
+        draw();
+      };
+    } else {
+      toggle.onclick = null;
+      toggle.setAttribute('aria-pressed', 'false');
+    }
+  }
+
+  function renderRollingIC(results) {
+    var r = results.rolling_ic || {};
+    if (!r.dates || r.dates.length === 0) {
+      emptyChart('rolling-ic-plot', 'No IC series yet.');
+      return;
+    }
+    setChartAria('rolling-ic-chart', 'Area chart of the rolling 63-day mean rank IC from ' + r.dates[0] + ' to ' + r.dates[r.dates.length - 1] + ', with the pre-registered 0.02 threshold marked.');
+    withPlotly('rolling-ic-plot', function () {
+      var trace = {
+        x: r.dates, y: r.values, name: 'Rolling 63d mean IC',
+        line: { color: PALETTE.honest, width: 2 }, fill: 'tozeroy',
+        fillcolor: alphaColor(PALETTE.honest, 0.15), connectgaps: false,
+      };
+      var layout = baseLayout({
+        shapes: [
+          { type: 'line', x0: r.dates[0], x1: r.dates[r.dates.length - 1], y0: 0, y1: 0, line: { color: PALETTE.line, width: 1 } },
+          { type: 'line', x0: r.dates[0], x1: r.dates[r.dates.length - 1], y0: THRESHOLD_IC, y1: THRESHOLD_IC, line: { color: PALETTE.leaky, width: 1.25, dash: 'dash' } },
+        ],
+        annotations: [
+          { x: r.dates[r.dates.length - 1], y: THRESHOLD_IC, xanchor: 'right', yanchor: 'bottom',
+            text: 'pre-registered bar: ' + THRESHOLD_IC, showarrow: false,
+            font: { color: PALETTE.leaky, size: 11, family: 'Cascadia Code, SF Mono, ui-monospace, Consolas, monospace' } },
+        ],
+        yaxis: { gridcolor: PALETTE.grid, zeroline: false, title: 'Rank IC' },
+        showlegend: false,
+      });
+      Plotly.newPlot('rolling-ic-plot', [trace], layout, plotConfig);
+    });
+  }
+
+  function renderFoldIC(results) {
+    var folds = results.per_fold_ic || [];
+    if (folds.length === 0) {
+      emptyChart('fold-ic-plot', 'No per-fold data yet.');
+      return;
+    }
+    setChartAria('fold-ic-chart', 'Bar chart of mean rank IC for each of ' + folds.length + ' walk-forward folds.');
+    withPlotly('fold-ic-plot', function () {
+      var colors = folds.map(function (f) {
+        if (!isNum(f.mean_ic)) return PALETTE.line;
+        return f.mean_ic >= 0 ? PALETTE.honest : PALETTE.leaky;
+      });
+      var trace = {
+        x: folds.map(function (f) { return 'fold ' + f.fold_id; }),
+        y: folds.map(function (f) { return isNum(f.mean_ic) ? f.mean_ic : null; }),
+        type: 'bar',
+        marker: { color: colors },
+        text: folds.map(function (f) { return (f.test_start || '?') + ' to ' + (f.test_end || '?'); }),
+        hovertemplate: folds.map(function (f) {
+          return isNum(f.mean_ic) ? '%{x}<br>mean IC %{y:.4f}<br>%{text}<extra></extra>' : '%{x}<br>no data<br>%{text}<extra></extra>';
+        }),
+      };
+      var annotations = folds.filter(function (f) { return !isNum(f.mean_ic); }).map(function (f) {
+        return { x: 'fold ' + f.fold_id, y: 0, text: 'no data', showarrow: false, yshift: 12, font: { color: PALETTE.text, size: 10 } };
+      });
+      var layout = baseLayout({ yaxis: { gridcolor: PALETTE.grid, zeroline: true, title: 'Mean rank IC' }, showlegend: false, annotations: annotations });
+      Plotly.newPlot('fold-ic-plot', [trace], layout, plotConfig);
+    });
+  }
+
   function renderFeatureImportance(results) {
-    const fi = results.feature_importance || {};
-    const rows = fi.mean_abs_shap_final_fold || [];
+    var fi = results.feature_importance || {};
+    var rows = fi.mean_abs_shap_final_fold || [];
     if (rows.length === 0) {
       emptyChart('shap-bar-plot', 'No SHAP data yet: run python -m alpha_lab.explain.');
     } else {
-      const sorted = rows.slice().sort(function (a, b) { return a.mean_abs_shap - b.mean_abs_shap; });
-      const trace = {
-        x: sorted.map(function (r) { return r.mean_abs_shap; }),
-        y: sorted.map(function (r) { return r.feature; }),
-        type: 'bar',
-        orientation: 'h',
-        marker: { color: PALETTE.model },
-      };
-      const layout = baseLayout({ xaxis: { gridcolor: PALETTE.grid, title: 'mean |SHAP|' }, yaxis: { gridcolor: 'transparent' }, showlegend: false, margin: { l: 130, r: 16, t: 8, b: 40 } });
-      Plotly.newPlot('shap-bar-plot', [trace], layout, plotConfig);
+      setChartAria('shap-bar-chart', 'Horizontal bar chart of mean absolute SHAP value per feature for the final fold, ' + rows.length + ' features.');
+      withPlotly('shap-bar-plot', function () {
+        var sorted = rows.slice().sort(function (a, b) { return a.mean_abs_shap - b.mean_abs_shap; });
+        var trace = {
+          x: sorted.map(function (r) { return r.mean_abs_shap; }),
+          y: sorted.map(function (r) { return r.feature; }),
+          type: 'bar', orientation: 'h', marker: { color: PALETTE.honest },
+        };
+        var layout = baseLayout({ xaxis: { gridcolor: PALETTE.grid, title: 'mean |SHAP|' }, yaxis: { gridcolor: 'transparent' }, showlegend: false, margin: { l: 130, r: 16, t: 8, b: 40 } });
+        Plotly.newPlot('shap-bar-plot', [trace], layout, plotConfig);
+      });
     }
 
-    const wrap = document.getElementById('stability-img-wrap');
+    var wrap = document.getElementById('stability-img-wrap');
+    var churnHtml = '';
     if (fi.top_feature_churns === true) {
-      wrap.innerHTML = '<p style="font-size:12.5px;color:var(--amber);margin:0 0 10px;">Top feature by mean |SHAP| churns across folds (reported as-is).</p>';
+      churnHtml = '<p style="font-size:12.5px;color:var(--leaky);margin:0 0 10px;">Top feature by mean |SHAP| churns across folds (reported as-is).</p>';
     } else if (fi.top_feature_churns === false) {
-      wrap.innerHTML = '<p style="font-size:12.5px;color:var(--green);margin:0 0 10px;">Top feature is stable across folds.</p>';
-    } else {
-      wrap.innerHTML = '';
+      churnHtml = '<p style="font-size:12.5px;color:var(--pass);margin:0 0 10px;">Top feature is stable across folds.</p>';
     }
-    wrap.innerHTML += '<img src="img/shap_stability_heatmap.png" alt="Feature rank stability heatmap" style="width:100%;border-radius:10px;border:1px solid var(--line);background:white;" onerror="this.replaceWith(Object.assign(document.createElement(\'div\'),{className:\'empty-note\',textContent:\'Heatmap not generated yet.\'}))" />';
+    wrap.innerHTML = churnHtml +
+      '<div class="paper-frame"><img src="img/shap_stability_heatmap.png" alt="Feature rank stability heatmap across folds" ' +
+      'onerror="this.closest(\'.paper-frame\').replaceWith(Object.assign(document.createElement(\'div\'),{className:\'empty-note\',textContent:\'Heatmap not generated yet.\'}))" /></div>';
 
-    const imgWrap = document.getElementById('shap-images');
-    const images = [
+    var imgWrap = document.getElementById('shap-images');
+    var images = [
       { src: 'img/shap_beeswarm.png', caption: 'Global beeswarm (final fold, OOS test rows)' },
       { src: 'img/shap_importance_bar.png', caption: 'Mean |SHAP| bar (final fold)' },
       { src: 'img/shap_waterfall_1.png', caption: 'Local waterfall, example 1' },
@@ -617,26 +1093,293 @@
       { src: 'img/shap_waterfall_3.png', caption: 'Local waterfall, example 3' },
     ];
     imgWrap.innerHTML = images.map(function (img) {
-      return '<figure><img src="' + img.src + '" alt="' + img.caption + '" loading="lazy" ' +
-        'onerror="this.closest(\'figure\').style.display=\'none\'" />' +
-        '<figcaption>' + img.caption + '</figcaption></figure>';
+      var cap = escapeHtml(img.caption);
+      return '<figure><div class="paper-frame"><img src="' + img.src + '" alt="' + cap + '" loading="lazy" ' +
+        'onerror="this.closest(\'figure\').style.display=\'none\'" /></div>' +
+        '<figcaption>' + cap + '</figcaption></figure>';
     }).join('');
   }
 
-  async function main() {
-    const results = await loadJSON('results.json');
-    if (!results) {
-      document.querySelector('.wrap').innerHTML = '<div class="card" style="margin-top:40px;">' +
-        '<h2>results.json not found</h2><p class="section-desc">Run <code>python -m alpha_lab.report</code> (or the full <code>run_all</code>) to generate it, then reload this page.</p></div>';
+  /* ---------------- addendum sections ---------------- */
+
+  function renderAddendumIntro(addendum) {
+    var el = document.getElementById('addendum-note');
+    if (addendum && addendum.note) el.textContent = addendum.note;
+  }
+
+  function renderNeutralization(neut) {
+    if (!neut) {
+      emptyChart('neut-plot', 'TBD: run python -m alpha_lab.neutralize.');
+      document.getElementById('neut-stats').innerHTML = '';
       return;
     }
+    if (neut.description) document.getElementById('neut-desc').textContent = neut.description;
+    var raw = neut.raw || {}, neutd = neut.neutralized || {};
+
+    setChartAria('neut-chart', 'Bar chart comparing raw prediction rank IC ' + fmtNum(raw.mean, 4) + ' to momentum-neutralized rank IC ' + fmtNum(neutd.mean, 4) + '.');
+    withPlotly('neut-plot', function () {
+      var trace = {
+        x: ['Raw predictions', 'Neutralized vs momentum'],
+        y: [isNum(raw.mean) ? raw.mean : null, isNum(neutd.mean) ? neutd.mean : null],
+        type: 'bar',
+        marker: { color: [PALETTE.other, PALETTE.honest] },
+        text: [fmtNum(raw.mean, 4), fmtNum(neutd.mean, 4)],
+        textposition: 'outside',
+      };
+      var layout = baseLayout({
+        yaxis: { gridcolor: PALETTE.grid, zeroline: true, title: 'Mean rank IC' }, showlegend: false,
+        shapes: [{ type: 'line', x0: -0.5, x1: 1.5, y0: THRESHOLD_IC, y1: THRESHOLD_IC, line: { color: PALETTE.leaky, width: 1, dash: 'dash' } }],
+      });
+      Plotly.newPlot('neut-plot', [trace], layout, plotConfig);
+    });
+
+    document.getElementById('neut-stats').innerHTML = [
+      { label: 'Raw mean IC', value: fmtNum(raw.mean, 4) },
+      { label: 'Raw NW t-stat', value: fmtNum(raw.newey_west_tstat, 2) },
+      { label: 'Neutralized mean IC', value: fmtNum(neutd.mean, 4) },
+      { label: 'Neutralized NW t-stat', value: fmtNum(neutd.newey_west_tstat, 2) },
+    ].map(function (s) {
+      return '<div class="stat-tile"><div class="label">' + escapeHtml(s.label) + '</div><div class="value">' + escapeHtml(s.value) + '</div></div>';
+    }).join('');
+
+    var stillNull = !isNum(neutd.mean) || neutd.mean <= THRESHOLD_IC || !isNum(neutd.newey_west_tstat) || neutd.newey_west_tstat <= 2.0;
+    document.getElementById('neut-verdict').textContent = stillNull
+      ? 'Residualizing against 12-1 momentum still leaves the signal below the pre-registered bar: this is still a NULL result after removing momentum overlap, not a different one.'
+      : 'Residualizing against 12-1 momentum leaves a mean IC above the pre-registered bar. Reported as a secondary finding worth a proper pre-registered follow-up, not as an amendment to the primary NULL verdict.';
+  }
+
+  function renderRegime(regime) {
+    var tickerGrid = document.getElementById('ticker-grid');
+    if (!regime) {
+      emptyChart('regime-plot', 'TBD: run python -m alpha_lab.regime.');
+      tickerGrid.innerHTML = '';
+      return;
+    }
+    if (regime.description) document.getElementById('regime-desc').textContent = regime.description;
+    var ric = regime.regime_rank_ic || {};
+    var names = Object.keys(ric);
+
+    setChartAria('regime-chart', 'Bar chart of mean rank IC split by volatility regime: ' + names.map(function (n) { return n + ' ' + fmtNum(ric[n].mean, 4); }).join(', ') + '.');
+    withPlotly('regime-plot', function () {
+      var trace = {
+        x: names.map(function (n) { return n.replace('_', ' '); }),
+        y: names.map(function (n) { return isNum(ric[n].mean) ? ric[n].mean : null; }),
+        type: 'bar',
+        marker: { color: names.map(function (n) { return n === 'high_vol' ? PALETTE.leaky : PALETTE.honest; }) },
+        text: names.map(function (n) { return fmtNum(ric[n].mean, 4); }),
+        textposition: 'outside',
+      };
+      var layout = baseLayout({
+        yaxis: { gridcolor: PALETTE.grid, zeroline: true, title: 'Mean rank IC' }, showlegend: false,
+        shapes: [{ type: 'line', x0: -0.5, x1: names.length - 0.5, y0: THRESHOLD_IC, y1: THRESHOLD_IC, line: { color: PALETTE.leaky, width: 1, dash: 'dash' } }],
+      });
+      Plotly.newPlot('regime-plot', [trace], layout, plotConfig);
+    });
+
+    var perTicker = (regime.per_ticker_ic || []).slice().sort(function (a, b) { return b.spearman_ic - a.spearman_ic; });
+    tickerGrid.innerHTML = perTicker.map(function (t) {
+      var pos = isNum(t.spearman_ic) && t.spearman_ic >= 0;
+      var v = fmtNum(t.spearman_ic, 3);
+      return '<div class="ticker-cell"><span class="t">' + escapeHtml(t.ticker || '?') + '</span>' +
+        '<span class="v ' + (pos ? 'pos' : 'neg') + '">' + escapeHtml(v) + '</span></div>';
+    }).join('');
+
+    var summary = regime.per_ticker_ic_summary;
+    var noteEl = document.getElementById('ticker-note');
+    if (summary) {
+      noteEl.textContent = 'Across ' + summary.n_tickers_total + ' names, per-ticker IC has mean ' + fmtNum(summary.mean_across_tickers, 4) +
+        ' (std ' + fmtNum(summary.std_across_tickers, 4) + '), with ' + summary.n_tickers_with_positive_ic + '/' + summary.n_tickers_total +
+        ' tickers showing a positive IC. With this few names and no correction for multiple comparisons, this spread is consistent with noise around a small or zero true effect, not a per-ticker pattern.';
+    } else {
+      noteEl.textContent = '';
+    }
+  }
+
+  function renderShapOverTime(shapTime) {
+    if (!shapTime || !shapTime.rows || shapTime.rows.length === 0) {
+      emptyChart('shap-time-plot', 'TBD: run python -m alpha_lab.explain.');
+      return;
+    }
+    var features = shapTime.feature_columns || [];
+    var rows = shapTime.rows;
+    var descEl = document.getElementById('shap-time-desc');
+    if (descEl) {
+      descEl.textContent = 'Mean |SHAP| per feature, one line per feature, across all ' + rows.length + ' walk-forward folds, how importance ranks drift over time rather than a single snapshot.';
+    }
+    setChartAria('shap-time-chart', 'Multi-line chart of mean absolute SHAP value per feature across ' + rows.length + ' walk-forward folds, ' + features.length + ' feature lines.');
+    withPlotly('shap-time-plot', function () {
+      var xs = rows.map(function (r) { return r.test_end || ('fold ' + r.fold_id); });
+      var traces = features.map(function (feat, i) {
+        return {
+          x: xs,
+          y: rows.map(function (r) { return isNum(r[feat]) ? r[feat] : null; }),
+          name: feat, mode: 'lines',
+          line: { color: FEATURE_LINE_COLORS[i % FEATURE_LINE_COLORS.length], width: 1.75 },
+        };
+      });
+      var layout = baseLayout({ yaxis: { gridcolor: PALETTE.grid, title: 'mean |SHAP|' }, legend: { orientation: 'h', y: -0.3, font: { color: PALETTE.text, size: 10 } }, margin: { l: 56, r: 16, t: 8, b: 70 } });
+      Plotly.newPlot('shap-time-plot', traces, layout, plotConfig);
+    });
+  }
+
+  function renderCPCV(cpcv) {
+    var statsEl = document.getElementById('cpcv-stats');
+    var pboNote = document.getElementById('cpcv-pbo-note');
+    if (!cpcv || !cpcv.paths || cpcv.paths.length === 0) {
+      emptyChart('cpcv-plot', 'TBD: run python -m alpha_lab.cpcv.');
+      statsEl.innerHTML = '';
+      pboNote.textContent = '';
+      return;
+    }
+    if (cpcv.description) document.getElementById('cpcv-desc').textContent = cpcv.description;
+    var dist = cpcv.oos_ic_distribution || {};
+    var paths = cpcv.paths;
+
+    setChartAria('cpcv-chart', 'Strip/box plot of out-of-sample rank IC across ' + paths.length + ' CPCV paths, mean ' + fmtNum(dist.mean, 4) + '.');
+    withPlotly('cpcv-plot', function () {
+      var ys = paths.map(function (p) { return p.oos_rank_ic && isNum(p.oos_rank_ic.mean) ? p.oos_rank_ic.mean : null; });
+      var trace = {
+        y: ys, x: paths.map(function () { return 'OOS rank IC across paths'; }),
+        type: 'box', boxpoints: 'all', pointpos: 0, jitter: 0.55,
+        marker: { color: PALETTE.honest, size: 6, opacity: 0.75 },
+        line: { color: PALETTE.other }, fillcolor: alphaColor(PALETTE.other, 0.12),
+        name: '', hovertemplate: 'IC %{y:.4f}<extra></extra>',
+      };
+      var shapes = [{ type: 'line', x0: -0.5, x1: 0.5, y0: THRESHOLD_IC, y1: THRESHOLD_IC, line: { color: PALETTE.leaky, width: 1.25, dash: 'dash' }, xref: 'x', yref: 'y' }];
+      var annotations = [{ x: 0.5, y: THRESHOLD_IC, xanchor: 'left', text: 'pre-registered bar', showarrow: false, font: { color: PALETTE.leaky, size: 11 } }];
+      var layout = baseLayout({
+        yaxis: { gridcolor: PALETTE.grid, zeroline: true, title: 'OOS mean rank IC' }, showlegend: false,
+        shapes: shapes, annotations: annotations, margin: { l: 56, r: 16, t: 8, b: 40 },
+      });
+      Plotly.newPlot('cpcv-plot', [trace], layout, plotConfig);
+    });
+
+    var pbo = cpcv.pbo || {};
+    statsEl.innerHTML = [
+      { label: 'Paths sampled', value: (cpcv.n_paths_sampled != null ? cpcv.n_paths_sampled : paths.length) + ' / ' + (cpcv.n_combinations_total != null ? cpcv.n_combinations_total : '?') },
+      { label: 'OOS IC mean', value: fmtNum(dist.mean, 4) },
+      { label: 'OOS IC std', value: fmtNum(dist.std, 4) },
+      { label: '95% CI (normal)', value: (dist.ci_95_normal ? '[' + fmtNum(dist.ci_95_normal[0], 3) + ', ' + fmtNum(dist.ci_95_normal[1], 3) + ']' : 'TBD') },
+      { label: '95% CI (percentile)', value: (dist.ci_95_percentile ? '[' + fmtNum(dist.ci_95_percentile[0], 3) + ', ' + fmtNum(dist.ci_95_percentile[1], 3) + ']' : 'TBD') },
+      { label: 'PBO', value: fmtNum(pbo.pbo, 3) + ' (logit ' + fmtNum(pbo.logit_pbo, 3) + ')' },
+    ].map(function (s) {
+      return '<div class="stat-tile"><div class="label">' + escapeHtml(s.label) + '</div><div class="value">' + escapeHtml(s.value) + '</div></div>';
+    }).join('');
+
+    var meanBelowBar = isNum(dist.mean) && dist.mean <= THRESHOLD_IC;
+    var pboText = pbo.note ? escapeHtml(pbo.note) : 'PBO (probability of backtest overfitting): a simplified single-config proxy, not the full Bailey et al. CSCV framework (which needs a searched candidate set to rank; this project never tunes hyperparameters).';
+    pboNote.innerHTML = pboText + '<br>' +
+      'The mean OOS rank IC across CPCV paths (' + escapeHtml(fmtNum(dist.mean, 4)) + ') is ' + (meanBelowBar ? 'still below' : 'above') +
+      ' the pre-registered ' + THRESHOLD_IC + ' bar' + (meanBelowBar ? ': the single walk-forward path was not an unlucky low draw from a real positive distribution, since a distribution of comparable splits does not clear the bar either.' : ', reported as a secondary finding for a proper pre-registered follow-up; the primary verdict above stands unchanged.');
+  }
+
+  function renderReproducibility(provenance) {
+    var strip = document.getElementById('repro-strip');
+    if (!provenance) {
+      strip.innerHTML = '<span style="grid-column:1/-1;">Reproducibility manifest not generated yet — see <code>data/provenance.json</code> after a full <code>python -m alpha_lab.run_all</code>.</span>';
+      return;
+    }
+    var fp = provenance.run_fingerprint_sha256 ? provenance.run_fingerprint_sha256.slice(0, 16) + '…' : 'N/A';
+    var pyVer = provenance.python_version ? String(provenance.python_version).split(' ')[0] : 'N/A';
+    var pkgs = provenance.package_versions || {};
+    var pkgStr = Object.keys(pkgs).map(function (k) { return k + '=' + pkgs[k]; }).join(', ') || 'N/A';
+    var cells = [
+      { k: 'Run fingerprint (sha256)', v: fp },
+      { k: 'Random seed', v: provenance.random_seed != null ? String(provenance.random_seed) : 'N/A' },
+      { k: 'Python', v: pyVer },
+      { k: 'Packages', v: pkgStr },
+    ];
+    strip.innerHTML = cells.map(function (c) {
+      return '<div><span class="k">' + escapeHtml(c.k) + '</span><span class="v">' + escapeHtml(c.v) + '</span></div>';
+    }).join('');
+  }
+
+  function renderFooterLinks() {
+    document.getElementById('footer-report-link').href = REPO_BLOB_BASE + 'REPORT.md';
+    document.getElementById('footer-methodology-link').href = REPO_BLOB_BASE + 'specs/methodology.md';
+  }
+
+  /* ============================================================
+     Orchestration
+     ============================================================ */
+
+  function renderAll(results) {
     renderHeader(results);
     renderBadges(results.audits);
+    renderHero(results);
     renderEquityCurve(results);
     renderRollingIC(results);
     renderFoldIC(results);
-    renderLeakyComparison(results);
     renderFeatureImportance(results);
+    var addendum = results.addendum || {};
+    renderAddendumIntro(addendum);
+    renderNeutralization(addendum.neutralization);
+    renderRegime(addendum.regime_breakdown);
+    renderShapOverTime(addendum.shap_importance_over_time);
+    renderCPCV(addendum.cpcv);
+    renderReproducibility(addendum.provenance);
+    renderFooterLinks();
+  }
+
+  function renderChartsOnly(results) {
+    /* Re-render only the Plotly-backed pieces after a live theme change,
+       so palette-dependent charts pick up new CSS var values (bug fix #11). */
+    renderHero(results);
+    renderEquityCurve(results);
+    renderRollingIC(results);
+    renderFoldIC(results);
+    renderFeatureImportance(results);
+    var addendum = results.addendum || {};
+    renderNeutralization(addendum.neutralization);
+    renderRegime(addendum.regime_breakdown);
+    renderShapOverTime(addendum.shap_importance_over_time);
+    renderCPCV(addendum.cpcv);
+  }
+
+  function showSkeleton(visible) {
+    document.getElementById('skeleton').hidden = !visible;
+    document.getElementById('app').hidden = visible;
+  }
+
+  function showFatal(html) {
+    document.getElementById('skeleton').hidden = true;
+    var app = document.getElementById('app');
+    app.hidden = false;
+    app.innerHTML = '<section><div class="empty-note critical">' + html + '</div></section>';
+  }
+
+  async function main() {
+    PALETTE = buildPalette();
+
+    if (location.protocol === 'file:') {
+      showFatal(
+        '<h2 style="margin:0 0 8px;font-size:16px;">This page needs to be served over HTTP, not opened directly</h2>' +
+        '<p class="section-desc" style="margin:0 0 4px;">Browsers block <code>fetch()</code> for local <code>file://</code> pages, so <code>results.json</code> cannot load this way. Serve the <code>docs/</code> folder locally, e.g.:</p>' +
+        '<p class="section-desc" style="margin:0 0 10px;"><code>python -m http.server</code> (run from inside <code>docs/</code>, then open <code>http://localhost:8000</code>)</p>' +
+        '<p class="section-desc" style="margin:0;">Or view the hosted version: <a href="' + HOSTED_URL + '">' + HOSTED_URL + '</a></p>'
+      );
+      return;
+    }
+
+    var result = await loadJSON('results.json');
+    if (!result.ok) {
+      showFatal(
+        '<h2 style="margin:0 0 8px;font-size:16px;">results.json not found</h2>' +
+        '<p class="section-desc" style="margin:0;">Run <code>python -m alpha_lab.report</code> (or the full <code>python -m alpha_lab.run_all</code>) from the repo root to generate it, then reload this page.</p>'
+      );
+      return;
+    }
+
+    var results = result.data;
+    showSkeleton(false);
+    renderAll(results);
+
+    if (window.matchMedia) {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+        PALETTE = buildPalette();
+        renderChartsOnly(results);
+      });
+    }
   }
 
   main();
