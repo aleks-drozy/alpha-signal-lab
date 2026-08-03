@@ -61,3 +61,46 @@ def test_embargo_days_scales_with_sample_length():
     splitter = PurgedWalkForward(CVConfig(embargo_fraction=0.01))
     assert splitter.embargo_days(1000) == 10
     assert splitter.embargo_days(3900) == 39
+
+
+def test_pathologically_small_train_window_yields_zero_folds_not_garbage():
+    """A degenerate CVConfig whose test block starts almost immediately after
+    train_start must not silently produce a fold trained on a handful of
+    days; the MIN_TRAIN_DATES guard should drop it, leaving zero folds."""
+    from alpha_lab.config import CVConfig
+    from alpha_lab.cv import PurgedWalkForward
+
+    dates = pd.bdate_range("2020-01-01", periods=40)
+    cfg = CVConfig(
+        horizon_days=5,
+        purge_days=5,
+        embargo_fraction=0.01,
+        train_start="2020-01-01",
+        train_end="2020-01-01",
+        test_start=str(dates[15].date()),
+        test_block_months=1,
+    )
+    folds = PurgedWalkForward(cfg).split(pd.Series(dates))
+    assert folds == []
+
+
+def test_min_train_dates_guard_drops_thin_fold_but_keeps_adequate_ones():
+    """A longer synthetic range where the first possible test block would be
+    backed by a too-thin train window: that fold is dropped, but a later
+    fold with an adequate (expanded) train window survives."""
+    from alpha_lab.config import CVConfig
+    from alpha_lab.cv import MIN_TRAIN_DATES, PurgedWalkForward
+
+    dates = pd.bdate_range("2020-01-01", periods=400)
+    cfg = CVConfig(
+        horizon_days=5,
+        purge_days=5,
+        embargo_fraction=0.01,
+        train_start="2020-01-01",
+        train_end=str(dates[20].date()),
+        test_start=str(dates[25].date()),
+        test_block_months=1,
+    )
+    folds = PurgedWalkForward(cfg).split(pd.Series(dates))
+    for fold in folds:
+        assert len(fold.train_dates) >= MIN_TRAIN_DATES

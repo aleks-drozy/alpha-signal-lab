@@ -8,6 +8,7 @@ tests here have run. Uses the committed fixture panel only, no network.
 from __future__ import annotations
 
 import json
+import sys
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -17,6 +18,21 @@ import pytest
 
 DOCS_DIR = Path(__file__).resolve().parents[1] / "docs"
 BADGES_PATH = DOCS_DIR / "badges.json"
+
+# The 8 pre-registered leakage audits (see module docstring). Used to detect
+# a partial run (e.g. `pytest -k shuffled`) so badges.json -- the dashboard's
+# audit receipt -- is never silently thinned to a subset with no indication
+# anything is missing.
+EXPECTED_CHECKS = {
+    "shuffled_label_destruction",
+    "split_boundary_assertions",
+    "point_in_time_feature_recomputation",
+    "shift_sensitivity_control",
+    "label_window_purity",
+    "no_full_series_statistics",
+    "adjusted_price_sanity",
+    "determinism",
+}
 
 _RESULTS: list[dict] = []
 
@@ -32,12 +48,33 @@ def audit_check(name: str, description: str):
         _RESULTS.append({"test": name, "passed": True, "description": description})
 
 
-@pytest.fixture(scope="module", autouse=True)
-def write_badges_after_module():
-    yield
+def _maybe_write_badges() -> None:
+    """Writes docs/badges.json only when every one of the 8 pre-registered
+    checks ran (a full module run); a partial run (e.g. `pytest -k shuffled`)
+    logs a loud warning and leaves any existing badges.json untouched rather
+    than silently thinning the dashboard's audit receipt to whatever subset
+    happened to run. Split out from the fixture below so it is directly unit
+    testable (see test_leakage_audit_badge_guard.py)."""
+    ran = {r["test"] for r in _RESULTS}
+    if ran != EXPECTED_CHECKS:
+        missing = sorted(EXPECTED_CHECKS - ran)
+        print(
+            f"WARNING: leakage-audit module ran a partial subset of checks "
+            f"({sorted(ran)}); NOT overwriting {BADGES_PATH} (missing: {missing}). "
+            "Run the full module (`pytest tests/test_leakage_audit.py`) to "
+            "refresh the dashboard's audit receipt.",
+            file=sys.stderr,
+        )
+        return
     DOCS_DIR.mkdir(parents=True, exist_ok=True)
     with open(BADGES_PATH, "w", encoding="utf-8") as f:
         json.dump(_RESULTS, f, indent=2)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def write_badges_after_module():
+    yield
+    _maybe_write_badges()
 
 
 # 1. Shuffled-label destruction ----------------------------------------------
