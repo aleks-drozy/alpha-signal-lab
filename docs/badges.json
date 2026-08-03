@@ -1,0 +1,42 @@
+[
+  {
+    "test": "shuffled_label_destruction",
+    "passed": true,
+    "description": "permuting training labels destroys any regression edge over a train-mean baseline and leaves no systematic OOS rank IC averaged over repeated shuffles"
+  },
+  {
+    "test": "split_boundary_assertions",
+    "passed": true,
+    "description": "every fold's train label window ends strictly before its test block, the gap meets purge+embargo, and test blocks are disjoint and ordered"
+  },
+  {
+    "test": "point_in_time_feature_recomputation",
+    "passed": true,
+    "description": "recomputing features from raw data sliced to date<=t exactly matches the pipeline's feature matrix"
+  },
+  {
+    "test": "shift_sensitivity_control",
+    "passed": true,
+    "description": "lagging every feature by one extra day does not materially improve OOS rank IC over the honest pipeline"
+  },
+  {
+    "test": "label_window_purity",
+    "passed": true,
+    "description": "labels cannot be produced without a full forward window; rows lacking one are NaN, never filled"
+  },
+  {
+    "test": "no_full_series_statistics",
+    "passed": true,
+    "description": "a naive scaler fit on train+test differs materially from one fit on train-only, and the pipeline's own rolling-window features for train-period dates are unchanged whether or not future rows are appended"
+  },
+  {
+    "test": "adjusted_price_sanity",
+    "passed": true,
+    "description": "no negative prices, no long zero-volume runs, no unflagged >40% daily moves, dates strictly increasing"
+  },
+  {
+    "test": "determinism",
+    "passed": true,
+    "description": "two fold fits/predicts with the same seed and inputs produce hash-identical OOS predictions"
+  }
+]

@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>alpha-signal-lab — ML Alpha Signal Research Pipeline</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --bg-elevated: #ffffff;
+    --card-border: #e3e6ee;
+    --text: #14161f;
+    --text-muted: #5b6072;
+    --text-faint: #8b90a0;
+    --accent: #2f5fdd;
+    --accent-soft: #e8edfc;
+    --green: #1f9d55;
+    --green-soft: #e5f7ec;
+    --red: #d1414a;
+    --red-soft: #fbe9ea;
+    --amber: #c8811a;
+    --amber-soft: #fbf1e1;
+    --line: #d7dbe6;
+    --shadow: 0 1px 2px rgba(20, 22, 31, 0.04), 0 4px 16px rgba(20, 22, 31, 0.05);
+    --chart-grid: #e6e8f0;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1017;
+      --bg-elevated: #171a24;
+      --card-border: #272b3a;
+      --text: #eceef4;
+      --text-muted: #a4a9ba;
+      --text-faint: #6b7086;
+      --accent: #6d93ff;
+      --accent-soft: #1c2745;
+      --green: #4fce8b;
+      --green-soft: #123322;
+      --red: #ef6b72;
+      --red-soft: #3a1c1f;
+      --amber: #e2ab55;
+      --amber-soft: #3a2c14;
+      --line: #2a2e3d;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+      --chart-grid: #262a38;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1017; --bg-elevated: #171a24; --card-border: #272b3a; --text: #eceef4;
+    --text-muted: #a4a9ba; --text-faint: #6b7086; --accent: #6d93ff; --accent-soft: #1c2745;
+    --green: #4fce8b; --green-soft: #123322; --red: #ef6b72; --red-soft: #3a1c1f;
+    --amber: #e2ab55; --amber-soft: #3a2c14; --line: #2a2e3d;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35); --chart-grid: #262a38;
+  }
+  :root[data-theme="light"] {
+    --bg: #f6f7fb; --bg-elevated: #ffffff; --card-border: #e3e6ee; --text: #14161f;
+    --text-muted: #5b6072; --text-faint: #8b90a0; --accent: #2f5fdd; --accent-soft: #e8edfc;
+    --green: #1f9d55; --green-soft: #e5f7ec; --red: #d1414a; --red-soft: #fbe9ea;
+    --amber: #c8811a; --amber-soft: #fbf1e1; --line: #d7dbe6;
+    --shadow: 0 1px 2px rgba(20,22,31,.04), 0 4px 16px rgba(20,22,31,.05); --chart-grid: #e6e8f0;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 28px 20px 80px;
+  }
+
+  a { color: var(--accent); }
+
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-faint);
+    margin: 0 0 8px;
+  }
+  h1 {
+    font-size: clamp(22px, 3.4vw, 30px);
+    line-height: 1.28;
+    margin: 0 0 14px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+  }
+  h2 {
+    font-size: 16px;
+    font-weight: 650;
+    margin: 0 0 4px;
+    letter-spacing: -0.005em;
+  }
+  .section-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0 0 16px;
+  }
+
+  .card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    padding: 20px 22px;
+  }
+  section { margin-top: 28px; }
+  section:first-of-type { margin-top: 0; }
+
+  /* Header / verdict */
+  .header-card { padding: 24px 26px; }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+    margin-top: 14px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .meta-row span b { color: var(--text); font-weight: 600; }
+
+  .verdict-banner {
+    margin-top: 18px;
+    border-radius: 12px;
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border: 1px solid var(--line);
+  }
+  .verdict-banner.pass { background: var(--green-soft); border-color: color-mix(in srgb, var(--green) 35%, var(--card-border)); }
+  .verdict-banner.null { background: var(--amber-soft); border-color: color-mix(in srgb, var(--amber) 35%, var(--card-border)); }
+  .verdict-banner.tbd { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 30%, var(--card-border)); }
+  .verdict-pill {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    color: white;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+  }
+  .verdict-pill.pass { background: var(--green); }
+  .verdict-pill.null { background: var(--amber); }
+  .verdict-pill.tbd { background: var(--accent); }
+  .verdict-text { font-size: 13.5px; color: var(--text); }
+  .verdict-text code { font-family: var(--mono); font-size: 12.5px; color: var(--text-muted); }
+
+  /* Audit badges */
+  .badge-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .badge {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 600;
+    border: 1px solid var(--line);
+    cursor: default;
+  }
+  .badge.pass { background: var(--green-soft); color: var(--green); border-color: color-mix(in srgb, var(--green) 30%, var(--card-border)); }
+  .badge.fail { background: var(--red-soft); color: var(--red); border-color: color-mix(in srgb, var(--red) 30%, var(--card-border)); }
+  .badge .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+  .badge .tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--text);
+    color: var(--bg);
+    font-weight: 500;
+    font-size: 12px;
+    line-height: 1.4;
+    padding: 9px 11px;
+    border-radius: 8px;
+    width: 240px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+    z-index: 20;
+    box-shadow: var(--shadow);
+  }
+  .badge:hover .tooltip, .badge:focus-visible .tooltip { opacity: 1; }
+
+  /* Grid layouts */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 860px) {
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+
+  .chart-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 8px;
+  }
+  .toggle-btn {
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  .toggle-btn:hover { color: var(--text); border-color: var(--accent); }
+  .toggle-btn.active { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+  .chart-box { width: 100%; overflow-x: auto; }
+  .plot { width: 100%; min-height: 320px; }
+
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+  }
+  .stat-tile {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .stat-tile .label { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em; }
+  .stat-tile .value { font-family: var(--mono); font-size: 16px; font-weight: 600; margin-top: 3px; }
+
+  .fi-images {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 14px;
+  }
+  @media (max-width: 700px) { .fi-images { grid-template-columns: 1fr; } }
+  .fi-images img {
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: white;
+    display: block;
+  }
+  .fi-images figcaption { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+  figure { margin: 0; }
+
+  .empty-note {
+    font-size: 13px;
+    color: var(--text-faint);
+    padding: 26px 10px;
+    text-align: center;
+    border: 1px dashed var(--line);
+    border-radius: 10px;
+  }
+
+  footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    font-size: 12.5px;
+    color: var(--text-faint);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    justify-content: space-between;
+  }
+  footer a { color: var(--text-muted); text-decoration: none; }
+  footer a:hover { color: var(--accent); text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 1. Header -->
+  <section>
+    <div class="card header-card">
+      <p class="eyebrow">alpha-signal-lab — pre-registered research</p>
+      <h1>Does gradient boosting on standard price/volume features add predictive power over plain momentum, under leakage-proof evaluation?</h1>
+      <div id="verdict-banner" class="verdict-banner tbd">
+        <span id="verdict-pill" class="verdict-pill tbd">TBD</span>
+        <span id="verdict-text" class="verdict-text">Pipeline has not been run yet in this environment.</span>
+      </div>
+      <div class="meta-row">
+        <span>Data span: <b id="meta-span">—</b></span>
+        <span>OOS period: <b id="meta-oos">—</b></span>
+        <span>Last run: <b id="meta-run">—</b></span>
+        <span>Success criterion: <b id="meta-criterion">mean rank IC &gt; 0.02 and NW t-stat &gt; 2.0</b></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Audit badges -->
+  <section>
+    <h2>Leakage audit receipt</h2>
+    <p class="section-desc">Eight pre-registered checks, run against a committed synthetic fixture in CI with no live network calls. Hover a badge for what it verifies.</p>
+    <div class="card">
+      <div id="badge-strip" class="badge-strip"></div>
+    </div>
+  </section>
+
+  <!-- 3. Equity curve -->
+  <section>
+    <h2>Long-short equity curve</h2>
+    <p class="section-desc">5-day rebalance, equal-weight top-3 long / bottom-3 short, model vs 12-1 momentum rank vs equal-weight buy-and-hold.</p>
+    <div class="card">
+      <div class="chart-toolbar">
+        <button id="log-toggle" class="toggle-btn">Log scale</button>
+      </div>
+      <div id="equity-chart" class="chart-box"><div id="equity-plot" class="plot"></div></div>
+    </div>
+  </section>
+
+  <!-- 4. Rolling IC -->
+  <section>
+    <div class="grid-2">
+      <div class="card">
+        <h2>Rolling 63-day mean rank IC</h2>
+        <p class="section-desc">Daily cross-sectional Spearman rank IC, smoothed. Threshold line at the pre-registered 0.02 bar.</p>
+        <div class="chart-box"><div id="rolling-ic-plot" class="plot"></div></div>
+      </div>
+      <div class="card">
+        <h2>Per-fold mean rank IC</h2>
+        <p class="section-desc">One LightGBM model per walk-forward fold; bars show that fold's mean OOS rank IC.</p>
+        <div class="chart-box"><div id="fold-ic-plot" class="plot"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. Honest vs leaky -->
+  <section>
+    <h2>Honest vs leaky: the headline chart</h2>
+    <p class="section-desc">Identical features, target, model, and hyperparameters. Only the cross-validation changes: PurgedWalkForward (honest) vs naive random 5-fold shuffled CV with no purge or embargo (leaky twin). The gap is pure leakage.</p>
+    <div class="card">
+      <div class="chart-box"><div id="leaky-plot" class="plot"></div></div>
+      <div class="stat-row" id="leaky-stats"></div>
+    </div>
+  </section>
+
+  <!-- 6. Feature importance -->
+  <section>
+    <h2>Feature importance</h2>
+    <p class="section-desc">SHAP on the final (most recent) fold's model, computed on that fold's OOS test rows only. Stability heatmap shows fold-to-fold rank churn (1 = most important).</p>
+    <div class="grid-2">
+      <div class="card">
+        <h3 style="margin:0 0 10px;font-size:14px;">Mean |SHAP| (final fold)</h3>
+        <div class="chart-box"><div id="shap-bar-plot" class="plot" style="min-height:280px;"></div></div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 10px;font-size:14px;">Per-fold feature-rank stability</h3>
+        <div id="stability-img-wrap"></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:20px;">
+      <h3 style="margin:0 0 10px;font-size:14px;">SHAP plots (from explain.py)</h3>
+      <div class="fi-images" id="shap-images"></div>
+    </div>
+  </section>
+
+  <!-- 7. Footer -->
+  <footer>
+    <span>alpha-signal-lab — research methodology, not investment advice.</span>
+    <span>
+      <a href="../REPORT.md">Full REPORT.md</a> &middot;
+      <a href="../specs/methodology.md">Pre-registered methodology</a>
+    </span>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  const PALETTE = {
+    model: getVar('--accent'),
+    momentum: '#8b6dd6',
+    buyhold: getVar('--text-faint'),
+    honest: getVar('--green'),
+    leaky: getVar('--red'),
+    grid: getVar('--chart-grid'),
+    text: getVar('--text-muted'),
+    line: getVar('--line'),
+  };
+
+  function getVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function baseLayout(extra) {
+    return Object.assign({
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: 'rgba(0,0,0,0)',
+      font: { family: '-apple-system, Segoe UI, sans-serif', color: PALETTE.text, size: 12 },
+      margin: { l: 48, r: 16, t: 8, b: 40 },
+      xaxis: { gridcolor: PALETTE.grid, zeroline: false },
+      yaxis: { gridcolor: PALETTE.grid, zeroline: false },
+      legend: { orientation: 'h', y: -0.18 },
+      hovermode: 'x unified',
+    }, extra || {});
+  }
+
+  const plotConfig = { responsive: true, displayModeBar: false };
+
+  function fmtPct(x, digits) {
+    if (x === null || x === undefined || Number.isNaN(x)) return 'TBD';
+    return (x * 100).toFixed(digits === undefined ? 2 : digits) + '%';
+  }
+  function fmtNum(x, digits) {
+    if (x === null || x === undefined || Number.isNaN(x)) return 'TBD';
+    return Number(x).toFixed(digits === undefined ? 3 : digits);
+  }
+
+  function emptyChart(divId, message) {
+    const el = document.getElementById(divId);
+    el.parentElement.innerHTML = '<div class="empty-note">' + message + '</div>';
+  }
+
+  async function loadJSON(path) {
+    try {
+      const res = await fetch(path);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function renderHeader(results) {
+    const verdict = results.verdict || {};
+    const banner = document.getElementById('verdict-banner');
+    const pill = document.getElementById('verdict-pill');
+    const text = document.getElementById('verdict-text');
+
+    let cls = 'tbd', label = 'TBD', msg = 'Pipeline has not been run yet in this environment.';
+    if (verdict.met === true) {
+      cls = 'pass'; label = 'PASS';
+      msg = 'Criterion met: mean rank IC ' + fmtNum(results.ic_comparison && results.ic_comparison.honest_mean_ic, 4) +
+        ' (threshold ' + verdict.ic_threshold + '), NW t-stat ' +
+        fmtNum(results.ic_comparison && results.ic_comparison.honest_tstat, 2) + ' (threshold ' + verdict.tstat_threshold + ').';
+    } else if (verdict.met === false) {
+      cls = 'null'; label = 'NULL';
+      msg = 'Criterion not met: mean rank IC ' + fmtNum(results.ic_comparison && results.ic_comparison.honest_mean_ic, 4) +
+        ' (threshold ' + verdict.ic_threshold + '), NW t-stat ' +
+        fmtNum(results.ic_comparison && results.ic_comparison.honest_tstat, 2) + ' (threshold ' + verdict.tstat_threshold + '). Reported honestly, not reframed.';
+    }
+    banner.className = 'verdict-banner ' + cls;
+    pill.className = 'verdict-pill ' + cls;
+    pill.textContent = label;
+    text.innerHTML = msg;
+
+    const span = results.data_span || {};
+    document.getElementById('meta-span').textContent = (span.ingest_start || '—') + ' → latest';
+    document.getElementById('meta-oos').textContent = span.oos_date_range ? (span.oos_date_range[0] + ' → ' + span.oos_date_range[1]) : 'not yet run';
+    document.getElementById('meta-run').textContent = results.generated_at ? new Date(results.generated_at).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '—';
+  }
+
+  function renderBadges(badges) {
+    const strip = document.getElementById('badge-strip');
+    if (!badges || badges.length === 0) {
+      strip.innerHTML = '<div class="empty-note" style="flex:1;">No audit run recorded yet. Run <code>pytest tests/test_leakage_audit.py</code>.</div>';
+      return;
+    }
+    strip.innerHTML = badges.map(function (b) {
+      const cls = b.passed ? 'pass' : 'fail';
+      const label = b.test.replace(/_/g, ' ');
+      return '<span class="badge ' + cls + '" tabindex="0">' +
+        '<span class="dot"></span>' + label +
+        '<span class="tooltip">' + b.description + '</span></span>';
+    }).join('');
+  }
+
+  function renderEquityCurve(results) {
+    const eq = results.equity_curves || {};
+    if (!eq.dates || eq.dates.length === 0) {
+      emptyChart('equity-plot', 'No equity curve yet: run python -m alpha_lab.run_all to populate this chart.');
+      document.getElementById('log-toggle').style.display = 'none';
+      return;
+    }
+    const traces = [
+      { x: eq.dates, y: eq.model_gross, name: 'Model (gross)', line: { color: PALETTE.model, width: 2.5 } },
+      { x: eq.dates, y: eq.model_net, name: 'Model (net)', line: { color: PALETTE.model, width: 1.5, dash: 'dot' } },
+      { x: eq.dates, y: eq.momentum_gross, name: '12-1 momentum', line: { color: PALETTE.momentum, width: 1.75 } },
+      { x: eq.dates, y: eq.buy_hold_gross, name: 'Buy & hold', line: { color: PALETTE.buyhold, width: 1.5, dash: 'dash' } },
+    ];
+    let logScale = false;
+    function draw() {
+      const layout = baseLayout({ yaxis: { gridcolor: PALETTE.grid, zeroline: false, type: logScale ? 'log' : 'linear', title: 'Cumulative growth of $1' } });
+      Plotly.react('equity-plot', traces, layout, plotConfig);
+    }
+    draw();
+    document.getElementById('log-toggle').addEventListener('click', function () {
+      logScale = !logScale;
+      this.classList.toggle('active', logScale);
+      draw();
+    });
+  }
+
+  function renderRollingIC(results) {
+    const r = results.rolling_ic || {};
+    if (!r.dates || r.dates.length === 0) {
+      emptyChart('rolling-ic-plot', 'No IC series yet.');
+      return;
+    }
+    const traces = [
+      { x: r.dates, y: r.values, name: 'Rolling 63d mean IC', line: { color: PALETTE.model, width: 2 }, fill: 'tozeroy', fillcolor: PALETTE.model + '22' },
+    ];
+    const layout = baseLayout({
+      shapes: [
+        { type: 'line', x0: r.dates[0], x1: r.dates[r.dates.length - 1], y0: 0, y1: 0, line: { color: PALETTE.line, width: 1 } },
+        { type: 'line', x0: r.dates[0], x1: r.dates[r.dates.length - 1], y0: 0.02, y1: 0.02, line: { color: PALETTE.leaky, width: 1, dash: 'dash' } },
+      ],
+      yaxis: { gridcolor: PALETTE.grid, zeroline: false, title: 'Rank IC' },
+      showlegend: false,
+    });
+    Plotly.newPlot('rolling-ic-plot', traces, layout, plotConfig);
+  }
+
+  function renderFoldIC(results) {
+    const folds = results.per_fold_ic || [];
+    if (folds.length === 0) {
+      emptyChart('fold-ic-plot', 'No per-fold data yet.');
+      return;
+    }
+    const trace = {
+      x: folds.map(function (f) { return 'fold ' + f.fold_id; }),
+      y: folds.map(function (f) { return f.mean_ic; }),
+      type: 'bar',
+      marker: { color: folds.map(function (f) { return f.mean_ic >= 0 ? PALETTE.model : PALETTE.leaky; }) },
+      text: folds.map(function (f) { return f.test_start + ' to ' + f.test_end; }),
+      hovertemplate: '%{x}<br>mean IC %{y:.4f}<br>%{text}<extra></extra>',
+    };
+    const layout = baseLayout({ yaxis: { gridcolor: PALETTE.grid, zeroline: true, title: 'Mean rank IC' }, showlegend: false });
+    Plotly.newPlot('fold-ic-plot', [trace], layout, plotConfig);
+  }
+
+  function renderLeakyComparison(results) {
+    const cmp = results.ic_comparison || {};
+    const hasHonest = cmp.honest_mean_ic !== null && cmp.honest_mean_ic !== undefined;
+    const hasLeaky = cmp.leaky_mean_ic !== null && cmp.leaky_mean_ic !== undefined;
+    if (!hasHonest && !hasLeaky) {
+      emptyChart('leaky-plot', 'No comparison yet: run evaluate and leaky_twin.');
+      return;
+    }
+    const trace = {
+      x: ['Honest (PurgedWalkForward)', 'Leaky twin (shuffled 5-fold)'],
+      y: [hasHonest ? cmp.honest_mean_ic : 0, hasLeaky ? cmp.leaky_mean_ic : 0],
+      type: 'bar',
+      marker: { color: [PALETTE.honest, PALETTE.leaky] },
+      text: [hasHonest ? fmtNum(cmp.honest_mean_ic, 4) : 'TBD', hasLeaky ? fmtNum(cmp.leaky_mean_ic, 4) : 'TBD'],
+      textposition: 'outside',
+    };
+    const layout = baseLayout({ yaxis: { gridcolor: PALETTE.grid, zeroline: true, title: 'Mean daily rank IC' }, showlegend: false, margin: { l: 48, r: 16, t: 8, b: 60 } });
+    Plotly.newPlot('leaky-plot', [trace], layout, plotConfig);
+
+    document.getElementById('leaky-stats').innerHTML = [
+      { label: 'Honest mean IC', value: fmtNum(cmp.honest_mean_ic, 4) },
+      { label: 'Honest NW t-stat', value: fmtNum(cmp.honest_tstat, 2) },
+      { label: 'Leaky mean IC', value: fmtNum(cmp.leaky_mean_ic, 4) },
+      { label: 'Leaky NW t-stat', value: fmtNum(cmp.leaky_tstat, 2) },
+    ].map(function (s) {
+      return '<div class="stat-tile"><div class="label">' + s.label + '</div><div class="value">' + s.value + '</div></div>';
+    }).join('');
+  }
+
+  function renderFeatureImportance(results) {
+    const fi = results.feature_importance || {};
+    const rows = fi.mean_abs_shap_final_fold || [];
+    if (rows.length === 0) {
+      emptyChart('shap-bar-plot', 'No SHAP data yet: run python -m alpha_lab.explain.');
+    } else {
+      const sorted = rows.slice().sort(function (a, b) { return a.mean_abs_shap - b.mean_abs_shap; });
+      const trace = {
+        x: sorted.map(function (r) { return r.mean_abs_shap; }),
+        y: sorted.map(function (r) { return r.feature; }),
+        type: 'bar',
+        orientation: 'h',
+        marker: { color: PALETTE.model },
+      };
+      const layout = baseLayout({ xaxis: { gridcolor: PALETTE.grid, title: 'mean |SHAP|' }, yaxis: { gridcolor: 'transparent' }, showlegend: false, margin: { l: 130, r: 16, t: 8, b: 40 } });
+      Plotly.newPlot('shap-bar-plot', [trace], layout, plotConfig);
+    }
+
+    const wrap = document.getElementById('stability-img-wrap');
+    if (fi.top_feature_churns === true) {
+      wrap.innerHTML = '<p style="font-size:12.5px;color:var(--amber);margin:0 0 10px;">Top feature by mean |SHAP| churns across folds (reported as-is).</p>';
+    } else if (fi.top_feature_churns === false) {
+      wrap.innerHTML = '<p style="font-size:12.5px;color:var(--green);margin:0 0 10px;">Top feature is stable across folds.</p>';
+    } else {
+      wrap.innerHTML = '';
+    }
+    wrap.innerHTML += '<img src="img/shap_stability_heatmap.png" alt="Feature rank stability heatmap" style="width:100%;border-radius:10px;border:1px solid var(--line);background:white;" onerror="this.replaceWith(Object.assign(document.createElement(\'div\'),{className:\'empty-note\',textContent:\'Heatmap not generated yet.\'}))" />';
+
+    const imgWrap = document.getElementById('shap-images');
+    const images = [
+      { src: 'img/shap_beeswarm.png', caption: 'Global beeswarm (final fold, OOS test rows)' },
+      { src: 'img/shap_importance_bar.png', caption: 'Mean |SHAP| bar (final fold)' },
+      { src: 'img/shap_waterfall_1.png', caption: 'Local waterfall, example 1' },
+      { src: 'img/shap_waterfall_2.png', caption: 'Local waterfall, example 2' },
+      { src: 'img/shap_waterfall_3.png', caption: 'Local waterfall, example 3' },
+    ];
+    imgWrap.innerHTML = images.map(function (img) {
+      return '<figure><img src="' + img.src + '" alt="' + img.caption + '" loading="lazy" ' +
+        'onerror="this.closest(\'figure\').style.display=\'none\'" />' +
+        '<figcaption>' + img.caption + '</figcaption></figure>';
+    }).join('');
+  }
+
+  async function main() {
+    const results = await loadJSON('results.json');
+    if (!results) {
+      document.querySelector('.wrap').innerHTML = '<div class="card" style="margin-top:40px;">' +
+        '<h2>results.json not found</h2><p class="section-desc">Run <code>python -m alpha_lab.report</code> (or the full <code>run_all</code>) to generate it, then reload this page.</p></div>';
+      return;
+    }
+    renderHeader(results);
+    renderBadges(results.audits);
+    renderEquityCurve(results);
+    renderRollingIC(results);
+    renderFoldIC(results);
+    renderLeakyComparison(results);
+    renderFeatureImportance(results);
+  }
+
+  main();
+})();
+</script>
+</body>
+</html>
