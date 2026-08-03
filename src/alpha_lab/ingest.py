@@ -10,8 +10,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import io
-import json
 import os
+import sys
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -33,6 +33,7 @@ from alpha_lab.config import (
     STOOQ_URL_TEMPLATE,
     UNIVERSE,
 )
+from alpha_lab.util import atomic_to_csv, atomic_write_json
 
 RAW_COLUMNS = ["Date", "Open", "High", "Low", "Close", "Volume"]
 
@@ -110,6 +111,17 @@ def _raw_path(ticker: str) -> str:
     return str(DATA_RAW_DIR / f"{safe_name}.csv")
 
 
+def _dedupe_and_validate_dates(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop duplicate (date) rows (keep last) and enforce sorted-unique dates
+    before anything gets cached, so a source hiccup that returns a repeated
+    or out-of-order date never silently corrupts downstream point-in-time
+    assumptions."""
+    df = df.sort_values("Date").drop_duplicates(subset="Date", keep="last").reset_index(drop=True)
+    assert df["Date"].is_monotonic_increasing, "dates not sorted after dedupe"
+    assert df["Date"].is_unique, "duplicate dates survived dedupe"
+    return df
+
+
 def _fetch_one(ticker: str) -> tuple[pd.DataFrame, str]:
     df = None
     source = "stooq"
@@ -123,6 +135,7 @@ def _fetch_one(ticker: str) -> tuple[pd.DataFrame, str]:
     if df is None or df.empty:
         raise RuntimeError(f"could not ingest {ticker} from stooq or yfinance")
     df = df[df["Date"] >= pd.Timestamp(INGEST_START_DATE)].reset_index(drop=True)
+    df = _dedupe_and_validate_dates(df)
     return df, source
 
 
@@ -143,7 +156,7 @@ def ingest_ticker(ticker: str, refresh: bool) -> TickerResult:
 
     df, source = _fetch_one(ticker)
     DATA_RAW_DIR.mkdir(parents=True, exist_ok=True)
-    df.to_csv(path, index=False, encoding=REQUIRED_ENCODING)
+    atomic_to_csv(df, path, encoding=REQUIRED_ENCODING)
     time.sleep(STOOQ_REQUEST_DELAY_SECONDS)
     return TickerResult(
         ticker=ticker,
@@ -187,6 +200,81 @@ def cross_check_stooq_vs_yahoo(tickers: list[str]) -> dict:
     return results
 
 
+def _enforce_cross_check(manifest: IngestManifest) -> None:
+    """A failed Stooq-vs-Yahoo cross-check means the two sources disagree
+    beyond tolerance for that ticker; that must not pass silently, so it is
+    logged loudly and flagged on the ticker's manifest entry for downstream
+    reporting to surface."""
+    for ticker, result in manifest.cross_check.items():
+        if result.get("ok", False):
+            continue
+        print(
+            f"WARNING: Stooq-vs-Yahoo cross-check failed for {ticker}: {result}",
+            file=sys.stderr,
+        )
+        if ticker in manifest.tickers:
+            manifest.tickers[ticker]["cross_check_failed"] = True
+
+
+def price_sanity_violations(df: pd.DataFrame) -> list[str]:
+    """Same sanity checks as tests/test_leakage_audit.py's
+    test_adjusted_price_sanity (which only ever runs against the committed
+    synthetic fixture), made callable against real cached data so the
+    pipeline itself enforces the data-quality guarantee the dashboard's
+    adjusted_price_sanity badge advertises, not just the fixture. Returns a
+    list of human-readable violation descriptions (empty if clean)."""
+    violations: list[str] = []
+    for col in ("Open", "High", "Low", "Close"):
+        n_bad = int((df[col] <= 0).sum())
+        if n_bad:
+            violations.append(f"{n_bad} non-positive {col} values")
+
+    if not df["Date"].is_monotonic_increasing:
+        violations.append("dates not monotonically increasing")
+    if not df["Date"].is_unique:
+        violations.append("duplicate dates present")
+
+    zero_volume = (df["Volume"] == 0).astype(int)
+    if zero_volume.any():
+        run_lengths = zero_volume.groupby((zero_volume != zero_volume.shift()).cumsum()).cumsum()
+        max_run = int(run_lengths.max())
+        if max_run > 10:
+            violations.append(f"zero-volume run of {max_run} consecutive trading days (> 10)")
+
+    daily_ret = df["Close"].pct_change().dropna()
+    big_moves = int((daily_ret.abs() > 0.40).sum())
+    if big_moves:
+        violations.append(f"{big_moves} unflagged single-day move(s) > 40%")
+
+    return violations
+
+
+def check_real_data_sanity(universe: list[str] | None = None) -> dict[str, list[str]]:
+    """Runs price_sanity_violations against every cached data/raw/*.csv for
+    `universe` (defaults to UNIVERSE + BENCHMARK_TICKER). Logs a loud
+    stderr WARNING per violating ticker but never raises: real market data
+    legitimately has circuit-breaker days, dividend/split-adjustment
+    artifacts, and other edge cases that a hard failure here would block
+    ingestion over, so this is a visibility guarantee, not a gate. Returns a
+    dict of ticker -> violation list (only for tickers with at least one
+    violation) for callers that want to act on it programmatically."""
+    universe = universe if universe is not None else UNIVERSE + [BENCHMARK_TICKER]
+    report: dict[str, list[str]] = {}
+    for ticker in universe:
+        path = _raw_path(ticker)
+        if not os.path.exists(path):
+            continue
+        df = pd.read_csv(path, encoding=REQUIRED_ENCODING, parse_dates=["Date"])
+        violations = price_sanity_violations(df)
+        if violations:
+            report[ticker] = violations
+            print(
+                f"WARNING: real-data price sanity check failed for {ticker}: {'; '.join(violations)}",
+                file=sys.stderr,
+            )
+    return report
+
+
 def run_ingest(refresh: bool = False) -> IngestManifest:
     manifest = IngestManifest(generated_at=datetime.now(timezone.utc).isoformat())
     all_tickers = UNIVERSE + [BENCHMARK_TICKER]
@@ -201,19 +289,24 @@ def run_ingest(refresh: bool = False) -> IngestManifest:
         }
         print(f"ingested {ticker}: source={result.source} rows={result.rows}")
     manifest.cross_check = cross_check_stooq_vs_yahoo(CROSS_CHECK_TICKERS)
+    _enforce_cross_check(manifest)
+
+    sanity_report = check_real_data_sanity(all_tickers)
+    for ticker, violations in sanity_report.items():
+        if ticker in manifest.tickers:
+            manifest.tickers[ticker]["price_sanity_violations"] = violations
+
     _write_manifest(manifest)
     return manifest
 
 
 def _write_manifest(manifest: IngestManifest) -> None:
-    MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "generated_at": manifest.generated_at,
         "tickers": manifest.tickers,
         "cross_check": manifest.cross_check,
     }
-    with open(MANIFEST_PATH, "w", encoding=REQUIRED_ENCODING) as f:
-        json.dump(payload, f, indent=2)
+    atomic_write_json(MANIFEST_PATH, payload, encoding=REQUIRED_ENCODING, indent=2)
 
 
 def main() -> None:

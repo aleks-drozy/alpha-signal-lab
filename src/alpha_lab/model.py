@@ -8,15 +8,18 @@ out test block. Run as: python -m alpha_lab.model
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 
 import lightgbm as lgb
 import pandas as pd
 
 from alpha_lab.config import DATA_PROCESSED_DIR, FEATURE_COLUMNS, LGBM
 from alpha_lab.cv import Fold, PurgedWalkForward
-from alpha_lab.features import run_features
+from alpha_lab.features import FEATURES_PATH, run_features
+from alpha_lab.util import atomic_to_parquet, atomic_write_json, sha256_of_file
 
 OOS_PREDICTIONS_PATH = DATA_PROCESSED_DIR / "oos_predictions.parquet"
+OOS_PREDICTIONS_FINGERPRINT_PATH = DATA_PROCESSED_DIR / "oos_predictions.fingerprint.json"
 
 
 def fit_predict_fold(panel: pd.DataFrame, fold: Fold) -> pd.DataFrame:
@@ -52,7 +55,13 @@ def run_model(force: bool = False) -> pd.DataFrame:
         drop=True
     )
     DATA_PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    oos.to_parquet(OOS_PREDICTIONS_PATH, index=False)
+    atomic_to_parquet(oos, OOS_PREDICTIONS_PATH)
+    if os.path.exists(FEATURES_PATH):
+        fingerprint = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "features_parquet_sha256": sha256_of_file(FEATURES_PATH),
+        }
+        atomic_write_json(OOS_PREDICTIONS_FINGERPRINT_PATH, fingerprint, indent=2)
     print(f"wrote {len(oos)} OOS predictions to {OOS_PREDICTIONS_PATH}")
     return oos
 

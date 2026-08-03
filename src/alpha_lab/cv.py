@@ -14,7 +14,17 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from alpha_lab.config import CV, CVConfig
+from alpha_lab.config import CV, CVConfig, LGBM
+
+# Below this many trading days in a fold's training window, the window is too
+# thin for LGBM.min_child_samples (per-leaf minimum sample count) to be a
+# meaningful constraint: with the current ~30-name universe even a handful of
+# training days yields more rows than min_child_samples, but a degenerate
+# date range (e.g. a misconfigured CVConfig, or a test harness feeding a
+# narrow synthetic range) could otherwise silently produce a fold trained on
+# a handful of rows. Such a fold is dropped rather than silently fit and
+# reported as if it were a normal fold.
+MIN_TRAIN_DATES = 30
 
 
 @dataclass(frozen=True)
@@ -70,6 +80,14 @@ class PurgedWalkForward:
             train_dates = unique_dates[train_mask]
             if len(train_dates) == 0:
                 continue
+            if len(train_dates) < MIN_TRAIN_DATES:
+                print(
+                    f"cv: skipping fold with a {len(train_dates)}-trading-day train window "
+                    f"(< MIN_TRAIN_DATES={MIN_TRAIN_DATES}); too thin for "
+                    f"LGBM.min_child_samples={LGBM.min_child_samples} to be a meaningful "
+                    "per-leaf constraint, would silently produce a garbage fold"
+                )
+                continue
 
             folds.append(
                 Fold(
@@ -81,6 +99,14 @@ class PurgedWalkForward:
                     train_dates=train_dates,
                     test_dates=test_dates,
                 )
+            )
+
+        last_used_date = folds[-1].test_end if folds else None
+        trailing = unique_dates[unique_dates > last_used_date] if last_used_date is not None else unique_dates
+        if len(trailing) > 0:
+            print(
+                f"cv: dropped {len(trailing)} trailing dates "
+                f"({trailing[0].date()}..{trailing[-1].date()}) as an incomplete final test block"
             )
         return folds
 

@@ -7,7 +7,9 @@ filled. Run as: python -m alpha_lab.features
 
 from __future__ import annotations
 
+import json
 import os
+from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
@@ -19,6 +21,7 @@ from alpha_lab.config import (
     DOLLAR_VOL_ZSCORE_WINDOW,
     FEATURE_COLUMNS,
     LABEL_HORIZON_DAYS,
+    MANIFEST_PATH,
     MOMENTUM_LOOKBACK_DAYS,
     MOMENTUM_SKIP_DAYS,
     REQUIRED_ENCODING,
@@ -30,8 +33,10 @@ from alpha_lab.config import (
     VOLUME_SURGE_LONG,
     VOLUME_SURGE_SHORT,
 )
+from alpha_lab.util import atomic_to_parquet, atomic_write_json, combined_hash
 
 FEATURES_PATH = DATA_PROCESSED_DIR / "features.parquet"
+FEATURES_FINGERPRINT_PATH = DATA_PROCESSED_DIR / "features.fingerprint.json"
 
 
 def _raw_path(ticker: str) -> str:
@@ -53,7 +58,12 @@ def _rsi(close: pd.Series, window: int) -> pd.Series:
     avg_loss = loss.rolling(window).mean()
     rs = avg_gain / avg_loss.replace(0.0, np.nan)
     rsi = 100.0 - (100.0 / (1.0 + rs))
-    return rsi.where(avg_loss != 0.0, 100.0)
+    rsi = rsi.where(avg_loss != 0.0, 100.0)
+    # Flat/stale stretch (avg_gain == avg_loss == 0): neutral, not bullish.
+    # NaN here so it is dropped by the same dropna policy as any other
+    # incomplete feature, instead of forcing a maximally bullish 100.
+    flat = (avg_gain == 0.0) & (avg_loss == 0.0)
+    return rsi.where(~flat, np.nan)
 
 
 def compute_raw_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -124,12 +134,27 @@ def add_excess_label(panel: pd.DataFrame) -> pd.DataFrame:
     return panel
 
 
+def _drop_non_finite_features(panel: pd.DataFrame) -> pd.DataFrame:
+    """Division by near-zero volatility/volume windows can produce +/-inf,
+    which survives a NaN-only dropna and would otherwise reach the
+    cross-sectional rank transform and the model silently. Treat non-finite
+    the same as NaN: drop the row."""
+    n_before = len(panel)
+    finite_mask = np.isfinite(panel[FEATURE_COLUMNS].to_numpy(dtype=float)).all(axis=1)
+    panel = panel[finite_mask].reset_index(drop=True)
+    n_dropped = n_before - len(panel)
+    if n_dropped:
+        print(f"dropped {n_dropped} rows with non-finite feature values")
+    return panel
+
+
 def build_feature_matrix(universe: list[str] | None = None) -> pd.DataFrame:
     universe = universe or UNIVERSE
     panels = [build_ticker_panel(t) for t in universe]
     panel = pd.concat(panels, ignore_index=True)
 
     panel = panel.dropna(subset=FEATURE_COLUMNS + ["fwd_ret_5d"]).reset_index(drop=True)
+    panel = _drop_non_finite_features(panel)
     panel = add_excess_label(panel)
     panel = cross_sectional_rank_transform(panel)
 
@@ -138,13 +163,36 @@ def build_feature_matrix(universe: list[str] | None = None) -> pd.DataFrame:
     return panel[ordered_cols].sort_values(["date", "ticker"]).reset_index(drop=True)
 
 
+def _write_features_fingerprint(universe: list[str]) -> None:
+    """Records the sha256 (from data/manifest.json) of every raw ticker file
+    this feature matrix was built from, so model.py/evaluate.py can later
+    detect a stale rebuild."""
+    if not os.path.exists(MANIFEST_PATH):
+        return
+    with open(MANIFEST_PATH, encoding=REQUIRED_ENCODING) as f:
+        raw_manifest = json.load(f)
+    input_hashes = {
+        t: raw_manifest["tickers"][t]["sha256"]
+        for t in universe
+        if t in raw_manifest.get("tickers", {})
+    }
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "input_hashes": input_hashes,
+        "combined_input_hash": combined_hash(input_hashes),
+    }
+    atomic_write_json(FEATURES_FINGERPRINT_PATH, payload, encoding=REQUIRED_ENCODING, indent=2)
+
+
 def run_features(force: bool = False) -> pd.DataFrame:
     if not force and os.path.exists(FEATURES_PATH):
         return pd.read_parquet(FEATURES_PATH)
 
-    panel = build_feature_matrix()
+    universe = UNIVERSE
+    panel = build_feature_matrix(universe)
     DATA_PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    panel.to_parquet(FEATURES_PATH, index=False)
+    atomic_to_parquet(panel, FEATURES_PATH)
+    _write_features_fingerprint(universe)
     print(f"wrote {len(panel)} rows to {FEATURES_PATH}")
     return panel
 

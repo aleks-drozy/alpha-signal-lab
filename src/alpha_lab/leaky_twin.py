@@ -25,6 +25,8 @@ from alpha_lab.config import (
 )
 from alpha_lab.evaluate import evaluate_strategy
 from alpha_lab.features import run_features
+from alpha_lab.model import run_model
+from alpha_lab.util import atomic_write_json
 
 LEAKY_TWIN_METRICS_PATH = DATA_PROCESSED_DIR / "leaky_twin_metrics.json"
 
@@ -47,21 +49,34 @@ def fit_predict_shuffled_kfold(panel: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def restrict_to_oos_date_range(panel: pd.DataFrame, oos: pd.DataFrame) -> pd.DataFrame:
+    """The leaky-vs-honest comparison is only apples-to-apples if both sides
+    are scored over the same calendar period. Without this, the leaky twin
+    was scored over the full ~2010+ panel while the honest model is only
+    ever scored OOS from EVAL_START_DATE, which conflates the CV-leakage
+    effect with a completely different (and easier) market regime."""
+    start, end = oos["date"].min(), oos["date"].max()
+    return panel[(panel["date"] >= start) & (panel["date"] <= end)].reset_index(drop=True)
+
+
 def run_leaky_twin(force: bool = False) -> dict:
     if not force and os.path.exists(LEAKY_TWIN_METRICS_PATH):
         with open(LEAKY_TWIN_METRICS_PATH, encoding=REQUIRED_ENCODING) as f:
             return json.load(f)
 
     panel = run_features(force=False)
-    preds = fit_predict_shuffled_kfold(panel)
+    oos = run_model(force=False)
+    restricted_panel = restrict_to_oos_date_range(panel, oos)
+
+    preds = fit_predict_shuffled_kfold(restricted_panel)
     metrics = evaluate_strategy(preds, pred_col="y_pred")
     metrics["n_rows"] = int(len(preds))
     metrics["n_folds"] = LEAKY_TWIN_N_FOLDS
     metrics["cv_type"] = "naive_shuffled_kfold_no_purge_no_embargo"
+    metrics["date_range"] = [str(restricted_panel["date"].min().date()), str(restricted_panel["date"].max().date())]
 
     DATA_PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LEAKY_TWIN_METRICS_PATH, "w", encoding=REQUIRED_ENCODING) as f:
-        json.dump(metrics, f, indent=2)
+    atomic_write_json(LEAKY_TWIN_METRICS_PATH, metrics, encoding=REQUIRED_ENCODING, indent=2)
     print(f"wrote leaky twin metrics to {LEAKY_TWIN_METRICS_PATH}")
     print(f"leaky twin mean rank IC: {metrics['rank_ic']['mean']:.4f}")
     return metrics

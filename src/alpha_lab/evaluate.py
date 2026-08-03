@@ -25,7 +25,8 @@ from alpha_lab.config import (
     TRANSACTION_COST_BPS_PER_SIDE,
 )
 from alpha_lab.features import run_features
-from alpha_lab.model import run_model
+from alpha_lab.model import OOS_PREDICTIONS_PATH, run_model
+from alpha_lab.util import atomic_write_json, sha256_of_file
 
 METRICS_PATH = DATA_PROCESSED_DIR / "metrics.json"
 TRADING_DAYS_PER_YEAR = 252
@@ -80,11 +81,13 @@ def top_bottom_period_returns(
     df: pd.DataFrame, pred_col: str, rebalance_ds: list[pd.Timestamp], n: int = DECILE_LONG_SHORT_N
 ) -> pd.DataFrame:
     rows = []
+    skipped = 0
     prev_longs: set[str] = set()
     prev_shorts: set[str] = set()
     for d in rebalance_ds:
         day = df[df["date"] == d]
         if len(day) < 2 * n:
+            skipped += 1
             continue
         ranked = day.sort_values(pred_col, ascending=False)
         longs = ranked.head(n)
@@ -115,6 +118,11 @@ def top_bottom_period_returns(
             }
         )
         prev_longs, prev_shorts = long_set, short_set
+    if skipped:
+        print(
+            f"evaluate: skipped {skipped}/{len(rebalance_ds)} rebalance dates "
+            f"with fewer than {2 * n} names in the cross-section"
+        )
     return pd.DataFrame(rows)
 
 
@@ -125,7 +133,10 @@ def equity_curve_stats(period_returns: pd.DataFrame, ret_col: str) -> dict:
     periods_per_year = TRADING_DAYS_PER_YEAR / REBALANCE_DAYS
     mean_r = r.mean()
     std_r = r.std(ddof=1) if len(r) > 1 else float("nan")
-    sharpe = float(mean_r / std_r * np.sqrt(periods_per_year)) if std_r not in (0.0, float("nan")) else float("nan")
+    # `x in (0.0, float("nan"))` never matches NaN (NaN != NaN), so the old
+    # guard let a NaN std_r through into the division below; check explicitly.
+    can_compute = not (np.isnan(std_r) or std_r == 0.0)
+    sharpe = float(mean_r / std_r * np.sqrt(periods_per_year)) if can_compute else float("nan")
 
     equity = np.cumprod(1.0 + r)
     running_max = np.maximum.accumulate(equity)
@@ -154,6 +165,14 @@ def decile_spread_stats(period_returns: pd.DataFrame) -> dict:
 
 
 def evaluate_strategy(df: pd.DataFrame, pred_col: str, label_col: str = "label") -> dict:
+    # A NaN prediction must never silently ride sort_values to one end of the
+    # ranking and land in the long or short book; drop it instead.
+    n_before = len(df)
+    df = df[df[pred_col].notna()].copy()
+    n_dropped = n_before - len(df)
+    if n_dropped:
+        print(f"evaluate: dropped {n_dropped} rows with NaN {pred_col} before ranking")
+
     ic_series = daily_rank_ic(df, pred_col, label_col)
     rebal_ds = rebalance_dates(df["date"])
     period_returns = top_bottom_period_returns(df, pred_col, rebal_ds)
@@ -194,6 +213,12 @@ def run_evaluate(force: bool = False) -> dict:
         features[["date", "ticker", momentum_col]], on=["date", "ticker"], how="left"
     )
 
+    universe_sizes = joined.groupby("date").size()
+    print(
+        "evaluate: per-date cross-sectional universe size "
+        f"min={universe_sizes.min()} max={universe_sizes.max()} mean={universe_sizes.mean():.1f}"
+    )
+
     model_metrics = evaluate_strategy(joined, pred_col="y_pred")
     momentum_metrics = evaluate_strategy(joined, pred_col=momentum_col)
     buy_hold_metrics = buy_hold_baseline(joined)
@@ -215,10 +240,11 @@ def run_evaluate(force: bool = False) -> dict:
         "n_oos_rows": int(len(oos)),
         "oos_date_range": [str(oos["date"].min().date()), str(oos["date"].max().date())],
     }
+    if os.path.exists(OOS_PREDICTIONS_PATH):
+        metrics["upstream_hashes"] = {"oos_predictions_parquet_sha256": sha256_of_file(OOS_PREDICTIONS_PATH)}
 
     DATA_PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    with open(METRICS_PATH, "w", encoding=REQUIRED_ENCODING) as f:
-        json.dump(metrics, f, indent=2)
+    atomic_write_json(METRICS_PATH, metrics, encoding=REQUIRED_ENCODING, indent=2)
     print(f"wrote metrics to {METRICS_PATH}")
     print(f"success criterion met: {criterion_met}")
     return metrics
