@@ -1,0 +1,14 @@
+{
+  "generated_at": "2026-08-03T02:14:40.735305+00:00",
+  "python_version": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+  "package_versions": {
+    "lightgbm": "4.7.0",
+    "pandas": "3.0.5",
+    "numpy": "2.4.6",
+    "scikit-learn": "1.9.0",
+    "shap": "0.51.0"
+  },
+  "random_seed": 42,
+  "raw_input_file_count": 32,
+  "run_fingerprint_sha256": "4065d2775e63a9260de88067a3471561bb44873ce917ad9ed1a005248b7ecc2c"
+}

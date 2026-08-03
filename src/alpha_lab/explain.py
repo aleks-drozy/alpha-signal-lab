@@ -32,8 +32,10 @@ from alpha_lab.config import (
 )
 from alpha_lab.cv import Fold, PurgedWalkForward
 from alpha_lab.features import run_features
+from alpha_lab.util import atomic_write_json
 
 SHAP_STABILITY_PATH = DATA_PROCESSED_DIR / "shap_stability.json"
+SHAP_IMPORTANCE_OVER_TIME_PATH = DATA_PROCESSED_DIR / "shap_importance_over_time.json"
 BEESWARM_PATH = DOCS_IMG_DIR / "shap_beeswarm.png"
 IMPORTANCE_BAR_PATH = DOCS_IMG_DIR / "shap_importance_bar.png"
 STABILITY_HEATMAP_PATH = DOCS_IMG_DIR / "shap_stability_heatmap.png"
@@ -161,6 +163,28 @@ def plot_stability_heatmap(stability: dict) -> None:
     plt.close(fig)
 
 
+def build_importance_over_time(stability: dict, folds: list[Fold]) -> dict:
+    """Post-hoc addendum: reshapes the per-fold mean |SHAP| values already
+    computed by compute_fold_stability (for the rank-stability heatmap) into
+    a fold-indexed time series -- one row per fold, one column per feature --
+    so a rolling-importance chart can be drawn on the dashboard. No new SHAP
+    computation: reuses per_fold_mean_abs_shap as-is."""
+    fold_by_id = {f.fold_id: f for f in folds}
+    per_fold_mean_abs = stability["per_fold_mean_abs_shap"]
+    rows = []
+    for fold_key in sorted(per_fold_mean_abs, key=lambda k: int(k)):
+        fold_id = int(fold_key)
+        fold = fold_by_id.get(fold_id)
+        row = {
+            "fold_id": fold_id,
+            "test_start": str(fold.test_start.date()) if fold else None,
+            "test_end": str(fold.test_end.date()) if fold else None,
+        }
+        row.update(per_fold_mean_abs[fold_key])
+        rows.append(row)
+    return {"feature_columns": list(FEATURE_COLUMNS), "rows": rows}
+
+
 def run_explain(force: bool = False) -> dict:
     if not force and os.path.exists(SHAP_STABILITY_PATH):
         with open(SHAP_STABILITY_PATH, encoding=REQUIRED_ENCODING) as f:
@@ -187,6 +211,8 @@ def run_explain(force: bool = False) -> dict:
     stability = compute_fold_stability(panel, folds)
     plot_stability_heatmap(stability)
 
+    importance_over_time = build_importance_over_time(stability, folds)
+
     stability["final_fold_id"] = final_fold.fold_id
     stability["final_fold_test_range"] = [
         str(final_fold.test_start.date()),
@@ -194,10 +220,12 @@ def run_explain(force: bool = False) -> dict:
     ]
 
     DATA_PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    with open(SHAP_STABILITY_PATH, "w", encoding=REQUIRED_ENCODING) as f:
-        json.dump(stability, f, indent=2)
+    atomic_write_json(SHAP_STABILITY_PATH, stability, encoding=REQUIRED_ENCODING, indent=2)
     print(f"wrote SHAP stability data to {SHAP_STABILITY_PATH}")
     print(f"top feature churns across folds: {stability['top_feature_churns']}")
+
+    atomic_write_json(SHAP_IMPORTANCE_OVER_TIME_PATH, importance_over_time, encoding=REQUIRED_ENCODING, indent=2)
+    print(f"wrote SHAP importance-over-time (addendum) to {SHAP_IMPORTANCE_OVER_TIME_PATH}")
     return stability
 
 
