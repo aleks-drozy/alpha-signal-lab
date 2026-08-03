@@ -286,3 +286,39 @@ NULL finding (the single walk-forward path was not an unlucky low draw from
 a real positive distribution), not as a different or contradicting result.
 Likewise, a still-null neutralized IC is reported plainly as "still null after
 removing momentum overlap," not reframed.
+
+## Addendum 2: underperformance diagnostic (added 2026-08-03, after the first addendum)
+
+This answers the natural follow-up question to the primary NULL result: the
+12-1 momentum baseline clears the pre-registered bar and the model does not,
+so why. It is computed entirely from the already-sealed OOS artifacts
+(`data/processed/oos_predictions.parquet`, `data/processed/features.parquet`,
+`data/processed/shap_importance_over_time.json`) after the primary verdict,
+plus one deterministic seed-42 refit of the final CV fold for the
+hyperparameter-binding check only. It changes nothing about the primary
+result above or about Addendum 1; it is a diagnostic layered on top of both.
+
+1. **Feature correlation** -- Spearman correlation across the 12 rank-
+   transformed features, flagging pairs at or above |rho|=0.75, computed by
+   `feature_correlation()` in `src/alpha_lab/diagnose.py`.
+2. **SHAP top-feature-per-fold** -- the argmax mean|SHAP| feature per CV fold
+   and a tally of how many folds each feature wins, from
+   `shap_top_feature_per_fold()`.
+3. **Momentum agreement** -- per-date Spearman rank correlation between the
+   model's predictions and the raw 12-1 momentum feature, summarized across
+   OOS days, from `momentum_agreement()`.
+4. **IC stability** -- per-fold rank IC for both the model and momentum, and
+   the cross-fold correlation between the two, from `ic_stability()`.
+5. **Tail divergence** -- per rebalance date, how often the model's top/bottom
+   picks diverge from momentum's, and how the realized tail spread and
+   losing-swap rate compare on those days, from `tail_divergence()`.
+6. **Turnover comparison** -- mean per-rebalance turnover for the model vs
+   momentum, from `turnover_comparison()`.
+7. **Hyperparameter binding** -- a deterministic refit of the final CV fold's
+   frozen hyperparameters, inspecting whether `num_leaves` is actually
+   binding on the fitted trees, from `hyperparameter_binding()`.
+
+All seven are written together to `data/processed/diagnosis.json` by
+`run_diagnose()` in `src/alpha_lab/diagnose.py` (run as
+`python -m alpha_lab.diagnose`), and rendered in `REPORT.md` and the
+dashboard by `src/alpha_lab/report.py` / `docs/index.html`.

@@ -40,6 +40,7 @@ from alpha_lab.explain import SHAP_IMPORTANCE_OVER_TIME_PATH, SHAP_STABILITY_PAT
 from alpha_lab.neutralize import NEUTRALIZATION_PATH
 from alpha_lab.regime import REGIME_BREAKDOWN_PATH
 from alpha_lab.cpcv import CPCV_PATH
+from alpha_lab.diagnose import DIAGNOSIS_PATH
 from alpha_lab.util import atomic_write_json, atomic_write_text
 
 RESULTS_PATH = DOCS_DIR / "results.json"
@@ -204,6 +205,7 @@ def build_results_json() -> dict:
     shap_importance_over_time = _load_json(SHAP_IMPORTANCE_OVER_TIME_PATH)
     cpcv = _load_json(CPCV_PATH)
     provenance = _load_json(PROVENANCE_PATH)
+    diagnosis = _load_json(DIAGNOSIS_PATH)
 
     run_completed = metrics is not None
     verdict_met = metrics["success_criterion"]["met"] if run_completed else None
@@ -281,6 +283,7 @@ def build_results_json() -> dict:
             "shap_importance_over_time": shap_importance_over_time,
             "cpcv": cpcv,
             "provenance": provenance,
+            "diagnosis": diagnosis,
         },
     }
     return results
@@ -441,6 +444,92 @@ def _render_addendum_section(addendum: dict) -> str:
         parts.append(f"\n{pbo.get('note', '')}")
     else:
         parts.append("TBD, run `python -m alpha_lab.cpcv`.")
+
+    parts.append("\n### Why did the model underperform the momentum baseline? (diagnostic)")
+    diag = addendum.get("diagnosis")
+    if diag:
+        corr = diag["feature_correlation"]
+        shap_top = diag["shap_top_feature_per_fold"]
+        mom_agree = diag["momentum_agreement"]
+        ic_stab = diag["ic_stability"]
+        tail_div = diag["tail_divergence"]
+        turnover = diag["turnover_comparison"]
+        hp_binding = diag["hyperparameter_binding"]
+
+        pairs = corr.get("redundant_pairs") or []
+        if pairs:
+            pair_lines = ["\n| Feature A | Feature B | Spearman rho |", "|---|---|---|"]
+            for p in pairs:
+                pair_lines.append(f"| {p['feature_a']} | {p['feature_b']} | {_fmt(p['correlation'], 3)} |")
+            parts.append("\n".join(pair_lines))
+        else:
+            parts.append("\nNo feature pairs at or above the redundancy threshold.")
+
+        counts = shap_top.get("counts") or {}
+        n_folds = len(shap_top.get("per_fold") or [])
+        if counts and n_folds:
+            tally_lines = ["\n| Feature | Folds as top SHAP feature |", "|---|---|"]
+            for feat, cnt in sorted(counts.items(), key=lambda kv: -kv[1]):
+                if cnt:
+                    tally_lines.append(f"| {feat} | {cnt}/{n_folds} |")
+            parts.append("\n".join(tally_lines))
+
+        parts.append(
+            f"\nModel-vs-momentum daily rank agreement (Spearman): mean "
+            f"{_fmt(mom_agree['mean_daily_spearman'])}, median {_fmt(mom_agree['median_daily_spearman'])}, "
+            f"std {_fmt(mom_agree['std_daily_spearman'])}, across {mom_agree['n_days']} days."
+        )
+
+        parts.append(
+            f"\nFold-level IC stability: model std/|mean| {_fmt(ic_stab['model']['std_over_abs_mean'], 2)} vs "
+            f"momentum's {_fmt(ic_stab['momentum']['std_over_abs_mean'], 2)}; cross-fold IC correlation "
+            f"{_fmt(ic_stab['cross_fold_correlation'], 3)} across {ic_stab['n_folds']} folds."
+        )
+
+        parts.append(
+            f"\nTail divergence: {_fmt(tail_div['pct_days_diverged'], digits=1, pct=True)} of "
+            f"{tail_div['n_rebalance_days']} rebalance days diverge from momentum's tail picks "
+            f"({tail_div['n_diverged_days']} days); on those days the model's realized tail spread is "
+            f"{_fmt(tail_div['spread_ratio'], 1)}x smaller than momentum's, with a "
+            f"{_fmt(tail_div['losing_swap_rate'], digits=1, pct=True)} losing-swap rate."
+        )
+
+        parts.append(
+            f"\nTurnover: model {_fmt(turnover['model_mean_turnover'], digits=1, pct=True)} per rebalance vs "
+            f"momentum's {_fmt(turnover['momentum_mean_turnover'], digits=1, pct=True)}."
+        )
+
+        parts.append(f"\n{hp_binding['note']}")
+
+        summary = diag.get("summary") or []
+        if summary:
+            parts.append("\n" + "\n".join(f"- {line}" for line in summary))
+    else:
+        parts.append("\nTBD, run `python -m alpha_lab.diagnose`.")
+
+    parts.append("\n### References")
+    parts.append(
+        "\n1. de Prado, *Advances in Financial Machine Learning* (2018): consistent with the "
+        "substitution effect, where correlated features dilute each other's split importance in "
+        "tree ensembles, as observed in the SHAP concentration above.\n"
+        "2. Gu, Kelly, Xiu, \"Empirical Asset Pricing via Machine Learning\" (*Review of Financial "
+        "Studies*, 2020): documents that ML gains over simple baselines typically require far "
+        "larger cross-sections than the 31 names used in this project.\n"
+        "3. Avramov, Cheng, Metzker, \"Machine Learning vs. Economic Restrictions\" (*Management "
+        "Science*, 2023): documents that ML equity-return predictability concentrates in "
+        "illiquid/small names and tends to evaporate on large caps, consistent with a large-cap "
+        "universe being a harder setting for a model edge to show up in.\n"
+        "4. Kelly, Malamud, Zhou, \"The Virtue of Complexity in Return Prediction\" (*Journal of "
+        "Finance*, 2024), together with the Nagel (2025) and Buncic (2025) critiques: consistent "
+        "with complex models often rediscovering a momentum-like signal with extra noise rather "
+        "than something cleanly orthogonal to it.\n"
+        "5. Alphalens/QuantRocket factor-evaluation documentation on positive-IC-but-negative-"
+        "decile-spread as a recognized diagnostic pattern, consistent with the tail-spread "
+        "divergence reported above.\n\n"
+        "These are corroborating context for the pattern seen in this pipeline's own numbers "
+        "above, not proof of the mechanism in this specific instance; this project's own "
+        "diagnostics are the primary evidence."
+    )
 
     parts.append("\n### Reproducibility manifest")
     if prov:

@@ -32,7 +32,8 @@ INDEX_HTML_PATH = Path(__file__).resolve().parents[1] / "docs" / "index.html"
 # results object and off results.addendum's sub-objects, derived by reading
 # renderHeader/renderHero/renderEquityCurve/renderRollingIC/renderFoldIC/
 # renderFeatureImportance/renderBadges/renderNeutralization/renderRegime/
-# renderShapOverTime/renderCPCV/renderReproducibility in docs/index.html.
+# renderShapOverTime/renderCPCV/renderDiagnosis/renderReproducibility in
+# docs/index.html.
 # If the JS gains a new field access, extend this list.
 SCALAR_PATHS = [
     "verdict.met",
@@ -60,6 +61,7 @@ SCALAR_PATHS = [
     "addendum.shap_importance_over_time",
     "addendum.cpcv",
     "addendum.provenance",
+    "addendum.diagnosis",
 ]
 
 LIST_PATHS = ["audits", "per_fold_ic"]
@@ -82,6 +84,13 @@ ADDENDUM_SUB_PATHS = {
              "oos_ic_distribution.ci_95_normal", "oos_ic_distribution.ci_95_percentile",
              "paths", "n_paths_sampled", "n_combinations_total", "pbo.pbo", "pbo.logit_pbo", "pbo.note"],
     "provenance": ["run_fingerprint_sha256", "random_seed", "python_version", "package_versions"],
+    "diagnosis": ["feature_correlation.redundant_pairs", "feature_correlation.matrix",
+                  "shap_top_feature_per_fold.per_fold", "shap_top_feature_per_fold.counts",
+                  "momentum_agreement.mean_daily_spearman", "ic_stability.model.std_over_abs_mean",
+                  "ic_stability.momentum.std_over_abs_mean", "ic_stability.cross_fold_correlation",
+                  "tail_divergence.pct_days_diverged", "tail_divergence.spread_ratio",
+                  "tail_divergence.losing_swap_rate", "turnover_comparison.model_mean_turnover",
+                  "turnover_comparison.momentum_mean_turnover", "hyperparameter_binding.note", "summary"],
 }
 
 
@@ -210,6 +219,58 @@ def _synthetic_provenance() -> dict:
     }
 
 
+def _synthetic_diagnosis() -> dict:
+    features = ["ret_5d", "ret_21d", "vol_21d", "vol_63d"]
+    matrix = {a: {b: (1.0 if a == b else 0.5) for b in features} for a in features}
+    return {
+        "description": "desc",
+        "feature_correlation": {
+            "matrix": matrix,
+            "redundant_pairs": [{"feature_a": "vol_21d", "feature_b": "vol_63d", "correlation": 0.806}],
+        },
+        "shap_top_feature_per_fold": {
+            "per_fold": [{"fold_id": 0, "top_feature": "vol_63d"}, {"fold_id": 1, "top_feature": "vol_63d"}],
+            "counts": {"vol_63d": 2, "ret_5d": 0, "ret_21d": 0, "vol_21d": 0},
+        },
+        "momentum_agreement": {
+            "mean_daily_spearman": 0.00047,
+            "median_daily_spearman": 0.0005,
+            "std_daily_spearman": 0.02,
+            "n_days": 100,
+        },
+        "ic_stability": {
+            "model": {"mean": 0.01, "std": 0.033, "std_over_abs_mean": 3.317},
+            "momentum": {"mean": 0.02, "std": 0.032, "std_over_abs_mean": 1.609},
+            "cross_fold_correlation": 0.180,
+            "n_folds": 21,
+        },
+        "tail_divergence": {
+            "pct_days_diverged": 0.919,
+            "model_tail_spread_on_diverged_days": 0.001,
+            "momentum_tail_spread_on_diverged_days": 0.008,
+            "spread_ratio": 8.1,
+            "losing_swap_rate": 0.515,
+            "n_rebalance_days": 200,
+            "n_diverged_days": 184,
+        },
+        "turnover_comparison": {"model_mean_turnover": 0.682, "momentum_mean_turnover": 0.154},
+        "hyperparameter_binding": {
+            "note": "note text",
+            "leaf_count_summary": {
+                "n_trees": 400,
+                "mean_leaves_per_tree": 27.7,
+                "max_leaves_per_tree": 31,
+                "pct_trees_at_num_leaves_cap": 0.14,
+            },
+            "min_child_samples_configured": 50,
+            "num_leaves_configured": 31,
+            "final_fold_id": 20,
+            "final_fold_train_rows": 1000,
+        },
+        "summary": ["line one", "line two"],
+    }
+
+
 def _synthetic_badges() -> list:
     return [{"test": "determinism", "passed": True, "description": "desc"}]
 
@@ -243,6 +304,7 @@ def full_synthetic_env(tmp_path, monkeypatch):
     shap_time_path = tmp_path / "shap_importance_over_time.json"
     cpcv_path = tmp_path / "cpcv.json"
     provenance_path = tmp_path / "provenance.json"
+    diagnosis_path = tmp_path / "diagnosis.json"
 
     _write_json(metrics_path, _synthetic_metrics(criterion_met=True))
     _write_json(leaky_path, _synthetic_leaky())
@@ -252,6 +314,7 @@ def full_synthetic_env(tmp_path, monkeypatch):
     _write_json(shap_time_path, _synthetic_shap_over_time())
     _write_json(cpcv_path, _synthetic_cpcv())
     _write_json(provenance_path, _synthetic_provenance())
+    _write_json(diagnosis_path, _synthetic_diagnosis())
 
     monkeypatch.setattr(report_mod, "METRICS_PATH", metrics_path)
     monkeypatch.setattr(report_mod, "LEAKY_TWIN_METRICS_PATH", leaky_path)
@@ -261,6 +324,7 @@ def full_synthetic_env(tmp_path, monkeypatch):
     monkeypatch.setattr(report_mod, "SHAP_IMPORTANCE_OVER_TIME_PATH", shap_time_path)
     monkeypatch.setattr(report_mod, "CPCV_PATH", cpcv_path)
     monkeypatch.setattr(report_mod, "PROVENANCE_PATH", provenance_path)
+    monkeypatch.setattr(report_mod, "DIAGNOSIS_PATH", diagnosis_path)
     monkeypatch.setattr(report_mod, "build_dashboard_series", lambda: _synthetic_series())
 
     badges_path = tmp_path / "badges.json"
@@ -322,6 +386,9 @@ def test_build_results_json_has_every_field_the_dashboard_reads(full_synthetic_e
             assert "spearman_ic" in block["per_ticker_ic"][0]
         if key == "shap_importance_over_time":
             assert "fold_id" in block["rows"][0] or "test_end" in block["rows"][0]
+        if key == "diagnosis":
+            assert "fold_id" in block["shap_top_feature_per_fold"]["per_fold"][0]
+            assert "feature_a" in block["feature_correlation"]["redundant_pairs"][0]
 
 
 # ---------------------------------------------------------------------------
@@ -362,7 +429,7 @@ def test_build_results_json_null_verdict_still_works(full_synthetic_env, tmp_pat
 
 @pytest.mark.parametrize(
     "attr",
-    ["BADGES_PATH", "SHAP_STABILITY_PATH", "NEUTRALIZATION_PATH", "REGIME_BREAKDOWN_PATH", "CPCV_PATH"],
+    ["BADGES_PATH", "SHAP_STABILITY_PATH", "NEUTRALIZATION_PATH", "REGIME_BREAKDOWN_PATH", "CPCV_PATH", "DIAGNOSIS_PATH"],
 )
 def test_build_results_json_survives_each_missing_addendum_artifact(full_synthetic_env, tmp_path, monkeypatch, attr):
     missing_path = tmp_path / "does_not_exist.json"
@@ -384,6 +451,7 @@ def test_build_results_json_survives_no_metrics_at_all(tmp_path, monkeypatch):
     monkeypatch.setattr(report_mod, "SHAP_IMPORTANCE_OVER_TIME_PATH", tmp_path / "missing_shaptime.json")
     monkeypatch.setattr(report_mod, "CPCV_PATH", tmp_path / "missing_cpcv.json")
     monkeypatch.setattr(report_mod, "PROVENANCE_PATH", tmp_path / "missing_prov.json")
+    monkeypatch.setattr(report_mod, "DIAGNOSIS_PATH", tmp_path / "missing_diagnosis.json")
     monkeypatch.setattr(report_mod, "BADGES_PATH", tmp_path / "missing_badges.json")
     monkeypatch.setattr(report_mod, "build_dashboard_series", lambda: {
         "available": False,

@@ -381,6 +381,19 @@
 
   .cpcv-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 16px; }
 
+  .diag-shap-strip { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
+  .diag-shap-tile {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    border-left-width: 3px;
+    background: var(--bg-raised);
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
   .empty-note {
     font-size: 13px;
     color: var(--text-faint);
@@ -607,6 +620,19 @@
     <p class="section-desc" id="cpcv-pbo-note" style="margin-top:14px;"></p>
   </section>
 
+  <!-- 11.5 Underperformance diagnostic -->
+  <section id="section-diagnosis">
+    <h2>Why did the model underperform?</h2>
+    <p class="section-desc" id="diag-desc">Computed after the primary verdict, from the already-sealed OOS predictions: a diagnostic look at why the model trails the 12-1 momentum baseline, not a re-run or reframing of the primary result.</p>
+    <div id="diag-corr-chart" class="chart-box"><div id="diag-corr-plot" class="plot" style="min-height:340px;"></div></div>
+    <p class="section-desc" id="diag-corr-caption" style="margin-top:10px;"></p>
+    <h3 style="margin-top:28px;">Per-fold top SHAP feature</h3>
+    <div id="diag-shap-strip" class="diag-shap-strip" role="list" aria-label="Top SHAP feature per cross-validation fold"></div>
+    <div class="stat-row" id="diag-stats" style="margin-top:24px;"></div>
+    <p class="section-desc" id="diag-prose" style="margin-top:14px;"></p>
+    <p class="section-desc" id="diag-report-link" style="margin-top:6px;"></p>
+  </section>
+
   <!-- 12. Footer -->
   <footer>
     <div class="footer-links">
@@ -787,7 +813,22 @@
       grid: getVar('--chart-grid'),
       text: getVar('--text-muted'),
       line: getVar('--line-strong'),
+      // Neutral ink ramp for sequential (not honest/leaky) scales, e.g. the
+      // feature-correlation heatmap: role-bound colors stay role-bound.
+      ink0: getVar('--bg-raised'),
+      ink1: getVar('--line-strong'),
+      ink2: getVar('--text-faint'),
+      ink3: getVar('--text'),
     };
+  }
+
+  function inkColorscale() {
+    return [
+      [0, PALETTE.ink0],
+      [0.33, PALETTE.ink1],
+      [0.66, PALETTE.ink2],
+      [1, PALETTE.ink3],
+    ];
   }
 
   function baseLayout(extra) {
@@ -1294,6 +1335,88 @@
     }).join('');
   }
 
+  function renderDiagnosis(diag) {
+    var corrCaption = document.getElementById('diag-corr-caption');
+    var shapStrip = document.getElementById('diag-shap-strip');
+    var statsEl = document.getElementById('diag-stats');
+    var proseEl = document.getElementById('diag-prose');
+    var linkEl = document.getElementById('diag-report-link');
+    if (!diag) {
+      emptyChart('diag-corr-plot', 'TBD: run python -m alpha_lab.diagnose.');
+      corrCaption.textContent = '';
+      shapStrip.innerHTML = '';
+      statsEl.innerHTML = '';
+      proseEl.textContent = '';
+      linkEl.innerHTML = '';
+      return;
+    }
+
+    var corr = diag.feature_correlation || {};
+    var matrix = corr.matrix || {};
+    var features = Object.keys(matrix);
+    var z = features.map(function (fa) {
+      return features.map(function (fb) { return isNum(matrix[fa][fb]) ? matrix[fa][fb] : null; });
+    });
+
+    setChartAria('diag-corr-chart', 'Heatmap of Spearman correlation across ' + features.length + ' features, ' +
+      ((corr.redundant_pairs || []).length) + ' pairs at or above the 0.75 redundancy threshold.');
+    withPlotly('diag-corr-plot', function () {
+      var trace = {
+        z: z, x: features, y: features, type: 'heatmap',
+        colorscale: inkColorscale(), zmin: -1, zmax: 1, showscale: true,
+        hovertemplate: '%{y} vs %{x}: %{z:.3f}<extra></extra>',
+      };
+      var layout = baseLayout({
+        margin: { l: 110, r: 16, t: 8, b: 90 },
+        xaxis: { gridcolor: PALETTE.grid, tickangle: -45 },
+        yaxis: { gridcolor: PALETTE.grid, autorange: 'reversed' },
+      });
+      Plotly.newPlot('diag-corr-plot', [trace], layout, plotConfig);
+    });
+
+    var pairs = corr.redundant_pairs || [];
+    corrCaption.textContent = pairs.length
+      ? 'Redundant pairs (|rho| >= 0.75): ' + pairs.map(function (p) {
+          return p.feature_a + ' / ' + p.feature_b + ' (rho=' + fmtNum(p.correlation, 3) + ')';
+        }).join(', ') + '.'
+      : 'No feature pairs at or above the 0.75 redundancy threshold.';
+
+    var perFold = (diag.shap_top_feature_per_fold || {}).per_fold || [];
+    shapStrip.innerHTML = perFold.map(function (f) {
+      var idx = features.indexOf(f.top_feature);
+      var color = FEATURE_LINE_COLORS[(idx >= 0 ? idx : 0) % FEATURE_LINE_COLORS.length];
+      return '<div class="diag-shap-tile" role="listitem" style="border-left-color:' + color + ';" title="fold ' +
+        escapeHtml(String(f.fold_id)) + ': ' + escapeHtml(f.top_feature) + '">' +
+        escapeHtml(String(f.fold_id)) + ': ' + escapeHtml(f.top_feature) + '</div>';
+    }).join('');
+
+    var momAgree = diag.momentum_agreement || {};
+    var icStab = diag.ic_stability || {};
+    var tailDiv = diag.tail_divergence || {};
+    var turnover = diag.turnover_comparison || {};
+
+    statsEl.innerHTML = [
+      { label: 'Momentum rank agreement', value: fmtNum(momAgree.mean_daily_spearman, 4) },
+      { label: 'Model IC std/|mean|', value: fmtNum(icStab.model && icStab.model.std_over_abs_mean, 2) },
+      { label: 'Momentum IC std/|mean|', value: fmtNum(icStab.momentum && icStab.momentum.std_over_abs_mean, 2) },
+      { label: 'Cross-fold IC correlation', value: fmtNum(icStab.cross_fold_correlation, 3) },
+      { label: 'Tail divergence', value: fmtPct(tailDiv.pct_days_diverged, 1) },
+      { label: 'Tail spread ratio', value: isNum(tailDiv.spread_ratio) ? fmtNum(tailDiv.spread_ratio, 1) + 'x' : 'TBD' },
+      { label: 'Losing-swap rate', value: fmtPct(tailDiv.losing_swap_rate, 1) },
+      { label: 'Model turnover', value: fmtPct(turnover.model_mean_turnover, 1) },
+      { label: 'Momentum turnover', value: fmtPct(turnover.momentum_mean_turnover, 1) },
+    ].map(function (s) {
+      return '<div class="stat-tile"><div class="label">' + escapeHtml(s.label) + '</div><div class="value">' + escapeHtml(s.value) + '</div></div>';
+    }).join('');
+
+    proseEl.textContent = 'The model leans on one redundant volatility-feature family far more than any other, ' +
+      'while barely resembling a noisy copy of momentum day to day. Its edge is less stable fold to fold than ' +
+      'momentum\'s, and on the days its tail picks diverge from momentum\'s, that divergence tends to lose ' +
+      'relative to momentum while trading far more to get there.';
+
+    linkEl.innerHTML = 'Full diagnostic and references in <a href="' + REPO_BLOB_BASE + 'REPORT.md">REPORT.md</a>.';
+  }
+
   function renderFooterLinks() {
     document.getElementById('footer-report-link').href = REPO_BLOB_BASE + 'REPORT.md';
     document.getElementById('footer-methodology-link').href = REPO_BLOB_BASE + 'specs/methodology.md';
@@ -1317,6 +1440,7 @@
     renderRegime(addendum.regime_breakdown);
     renderShapOverTime(addendum.shap_importance_over_time);
     renderCPCV(addendum.cpcv);
+    renderDiagnosis(addendum.diagnosis);
     renderReproducibility(addendum.provenance);
     renderFooterLinks();
   }
@@ -1334,6 +1458,7 @@
     renderRegime(addendum.regime_breakdown);
     renderShapOverTime(addendum.shap_importance_over_time);
     renderCPCV(addendum.cpcv);
+    renderDiagnosis(addendum.diagnosis);
   }
 
   function showSkeleton(visible) {

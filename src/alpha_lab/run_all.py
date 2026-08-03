@@ -16,6 +16,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from alpha_lab.config import LGBM, MANIFEST_PATH, PROJECT_ROOT, REQUIRED_ENCODING
 from alpha_lab.cpcv import run_cpcv
+from alpha_lab.diagnose import run_diagnose
 from alpha_lab.evaluate import METRICS_PATH, run_evaluate
 from alpha_lab.explain import run_explain
 from alpha_lab.features import FEATURES_PATH, run_features
@@ -37,6 +38,7 @@ STEPS = [
     "neutralize (supplementary)",
     "regime (supplementary)",
     "cpcv (supplementary)",
+    "diagnose (diagnostic/supplementary)",
     "report",
 ]
 
@@ -157,7 +159,10 @@ def run_all(refresh: bool = False) -> None:
         _print_step("cpcv (supplementary)", 9)
         run_cpcv(force=True)
 
-        _print_step("report", 10)
+        _print_step("diagnose (diagnostic/supplementary)", 10)
+        run_diagnose(force=True)
+
+        _print_step("report", 11)
         run_report(force=True)
 
         _check_stage_fingerprints()

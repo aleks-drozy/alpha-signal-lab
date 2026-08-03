@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-03T02:36:52.194456+00:00",
+  "generated_at": "2026-08-03T11:03:09.875995+00:00",
   "run_completed": true,
   "data_span": {
     "ingest_start": "2009-01-01",
@@ -9939,6 +9939,345 @@
       "random_seed": 42,
       "raw_input_file_count": 32,
       "run_fingerprint_sha256": "4065d2775e63a9260de88067a3471561bb44873ce917ad9ed1a005248b7ecc2c"
+    },
+    "diagnosis": {
+      "description": "Post-hoc addendum: diagnoses why the ML model underperformed the 12-1 momentum baseline, using only already-generated pipeline artifacts plus one deterministic seed-42 refit of the final CV fold for the hyperparameter-binding check. Diagnostic only, does not alter the primary pre-registered verdict.",
+      "feature_correlation": {
+        "matrix": {
+          "ret_5d": {
+            "ret_5d": 1.0,
+            "ret_21d": 0.42504189606229115,
+            "ret_63d": 0.242370187402563,
+            "ret_252d_skip21": 0.02842480085624594,
+            "ret_1d": 0.3813378728074033,
+            "vol_21d": 0.02121067484611318,
+            "vol_63d": 0.030130113293414598,
+            "vol_ratio_21_63": -0.004900779145104059,
+            "dollar_vol_21d_z": 0.02029019683411446,
+            "vol_surge_5_63": 0.011205996743562941,
+            "rsi_14": 0.5101939175430104,
+            "dist_from_sma200": 0.18671366504858147
+          },
+          "ret_21d": {
+            "ret_5d": 0.42504189606229115,
+            "ret_21d": 1.0,
+            "ret_63d": 0.5325609519754727,
+            "ret_252d_skip21": 0.03849034460986286,
+            "ret_1d": 0.17667799529311481,
+            "vol_21d": 0.021133813392276008,
+            "vol_63d": 0.052205418774531574,
+            "vol_ratio_21_63": -0.031692535311906814,
+            "dollar_vol_21d_z": 0.09678104305659208,
+            "vol_surge_5_63": -0.0718456309370611,
+            "rsi_14": 0.7309729711077757,
+            "dist_from_sma200": 0.3800432151429245
+          },
+          "ret_63d": {
+            "ret_5d": 0.242370187402563,
+            "ret_21d": 0.5325609519754727,
+            "ret_63d": 1.0,
+            "ret_252d_skip21": 0.3456403909615716,
+            "ret_1d": 0.10122571296589267,
+            "vol_21d": 0.022797810604897814,
+            "vol_63d": 0.05990210719519634,
+            "vol_ratio_21_63": -0.05152370059945578,
+            "dollar_vol_21d_z": 0.1130905308450544,
+            "vol_surge_5_63": -0.09413221505620875,
+            "rsi_14": 0.4162173085539204,
+            "dist_from_sma200": 0.5994596996403121
+          },
+          "ret_252d_skip21": {
+            "ret_5d": 0.02842480085624594,
+            "ret_21d": 0.03849034460986286,
+            "ret_63d": 0.3456403909615716,
+            "ret_252d_skip21": 1.0,
+            "ret_1d": 0.019373389816076902,
+            "vol_21d": 0.12414756331963941,
+            "vol_63d": 0.13278433789604055,
+            "vol_ratio_21_63": 0.008713435226158781,
+            "dollar_vol_21d_z": 0.04853883556616474,
+            "vol_surge_5_63": -0.01851401141994953,
+            "rsi_14": 0.03453219943287476,
+            "dist_from_sma200": 0.494745413048748
+          },
+          "ret_1d": {
+            "ret_5d": 0.3813378728074033,
+            "ret_21d": 0.17667799529311481,
+            "ret_63d": 0.10122571296589267,
+            "ret_252d_skip21": 0.019373389816076902,
+            "ret_1d": 1.0,
+            "vol_21d": 0.004753084890089794,
+            "vol_63d": 0.009264688139829459,
+            "vol_ratio_21_63": -0.005546126881865789,
+            "dollar_vol_21d_z": 9.603212001414239e-05,
+            "vol_surge_5_63": 0.0011778347863942323,
+            "rsi_14": 0.2153357035407127,
+            "dist_from_sma200": 0.08640482998020449
+          },
+          "vol_21d": {
+            "ret_5d": 0.02121067484611318,
+            "ret_21d": 0.021133813392276008,
+            "ret_63d": 0.022797810604897814,
+            "ret_252d_skip21": 0.12414756331963941,
+            "ret_1d": 0.004753084890089794,
+            "vol_21d": 1.0,
+            "vol_63d": 0.805829489383038,
+            "vol_ratio_21_63": 0.43890144395421865,
+            "dollar_vol_21d_z": 0.23922613891867808,
+            "vol_surge_5_63": 0.10423052980953923,
+            "rsi_14": -0.04556416001230723,
+            "dist_from_sma200": -0.14801031126678138
+          },
+          "vol_63d": {
+            "ret_5d": 0.030130113293414598,
+            "ret_21d": 0.052205418774531574,
+            "ret_63d": 0.05990210719519634,
+            "ret_252d_skip21": 0.13278433789604055,
+            "ret_1d": 0.009264688139829459,
+            "vol_21d": 0.805829489383038,
+            "vol_63d": 1.0,
+            "vol_ratio_21_63": -0.05160395531492876,
+            "dollar_vol_21d_z": -0.0002904794456537919,
+            "vol_surge_5_63": -0.087350721347419,
+            "rsi_14": -0.014586347593538168,
+            "dist_from_sma200": -0.1570827473211307
+          },
+          "vol_ratio_21_63": {
+            "ret_5d": -0.004900779145104059,
+            "ret_21d": -0.031692535311906814,
+            "ret_63d": -0.05152370059945578,
+            "ret_252d_skip21": 0.008713435226158781,
+            "ret_1d": -0.005546126881865789,
+            "vol_21d": 0.43890144395421865,
+            "vol_63d": -0.05160395531492876,
+            "vol_ratio_21_63": 1.0,
+            "dollar_vol_21d_z": 0.4787038538684615,
+            "vol_surge_5_63": 0.3462445193471228,
+            "rsi_14": -0.04838359819365111,
+            "dist_from_sma200": -0.014330479572289197
+          },
+          "dollar_vol_21d_z": {
+            "ret_5d": 0.02029019683411446,
+            "ret_21d": 0.09678104305659208,
+            "ret_63d": 0.1130905308450544,
+            "ret_252d_skip21": 0.04853883556616474,
+            "ret_1d": 9.603212001414239e-05,
+            "vol_21d": 0.23922613891867808,
+            "vol_63d": -0.0002904794456537919,
+            "vol_ratio_21_63": 0.4787038538684615,
+            "dollar_vol_21d_z": 1.0,
+            "vol_surge_5_63": 0.5148076422648961,
+            "rsi_14": 0.044667339603933605,
+            "dist_from_sma200": 0.07273634902354263
+          },
+          "vol_surge_5_63": {
+            "ret_5d": 0.011205996743562941,
+            "ret_21d": -0.0718456309370611,
+            "ret_63d": -0.09413221505620875,
+            "ret_252d_skip21": -0.01851401141994953,
+            "ret_1d": 0.0011778347863942323,
+            "vol_21d": 0.10423052980953923,
+            "vol_63d": -0.087350721347419,
+            "vol_ratio_21_63": 0.3462445193471228,
+            "dollar_vol_21d_z": 0.5148076422648961,
+            "vol_surge_5_63": 1.0,
+            "rsi_14": -0.0551628053849105,
+            "dist_from_sma200": -0.045749470692169565
+          },
+          "rsi_14": {
+            "ret_5d": 0.5101939175430104,
+            "ret_21d": 0.7309729711077757,
+            "ret_63d": 0.4162173085539204,
+            "ret_252d_skip21": 0.03453219943287476,
+            "ret_1d": 0.2153357035407127,
+            "vol_21d": -0.04556416001230723,
+            "vol_63d": -0.014586347593538168,
+            "vol_ratio_21_63": -0.04838359819365111,
+            "dollar_vol_21d_z": 0.044667339603933605,
+            "vol_surge_5_63": -0.0551628053849105,
+            "rsi_14": 1.0,
+            "dist_from_sma200": 0.3444189805788973
+          },
+          "dist_from_sma200": {
+            "ret_5d": 0.18671366504858147,
+            "ret_21d": 0.3800432151429245,
+            "ret_63d": 0.5994596996403121,
+            "ret_252d_skip21": 0.494745413048748,
+            "ret_1d": 0.08640482998020449,
+            "vol_21d": -0.14801031126678138,
+            "vol_63d": -0.1570827473211307,
+            "vol_ratio_21_63": -0.014330479572289197,
+            "dollar_vol_21d_z": 0.07273634902354263,
+            "vol_surge_5_63": -0.045749470692169565,
+            "rsi_14": 0.3444189805788973,
+            "dist_from_sma200": 1.0
+          }
+        },
+        "redundant_pairs": [
+          {
+            "feature_a": "vol_21d",
+            "feature_b": "vol_63d",
+            "correlation": 0.805829489383038
+          }
+        ]
+      },
+      "shap_top_feature_per_fold": {
+        "per_fold": [
+          {
+            "fold_id": 0,
+            "top_feature": "vol_63d"
+          },
+          {
+            "fold_id": 1,
+            "top_feature": "vol_63d"
+          },
+          {
+            "fold_id": 2,
+            "top_feature": "vol_63d"
+          },
+          {
+            "fold_id": 3,
+            "top_feature": "vol_63d"
+          },
+          {
+            "fold_id": 4,
+            "top_feature": "vol_63d"
+          },
+          {
+            "fold_id": 5,
+            "top_feature": "vol_63d"
+          },
+          {
+            "fold_id": 6,
+            "top_feature": "vol_63d"
+          },
+          {
+            "fold_id": 7,
+            "top_feature": "vol_63d"
+          },
+          {
+            "fold_id": 8,
+            "top_feature": "vol_21d"
+          },
+          {
+            "fold_id": 9,
+            "top_feature": "vol_21d"
+          },
+          {
+            "fold_id": 10,
+            "top_feature": "vol_21d"
+          },
+          {
+            "fold_id": 11,
+            "top_feature": "vol_21d"
+          },
+          {
+            "fold_id": 12,
+            "top_feature": "vol_21d"
+          },
+          {
+            "fold_id": 13,
+            "top_feature": "vol_21d"
+          },
+          {
+            "fold_id": 14,
+            "top_feature": "vol_21d"
+          },
+          {
+            "fold_id": 15,
+            "top_feature": "vol_21d"
+          },
+          {
+            "fold_id": 16,
+            "top_feature": "vol_21d"
+          },
+          {
+            "fold_id": 17,
+            "top_feature": "vol_21d"
+          },
+          {
+            "fold_id": 18,
+            "top_feature": "vol_21d"
+          },
+          {
+            "fold_id": 19,
+            "top_feature": "vol_21d"
+          },
+          {
+            "fold_id": 20,
+            "top_feature": "vol_21d"
+          }
+        ],
+        "counts": {
+          "ret_5d": 0,
+          "ret_21d": 0,
+          "ret_63d": 0,
+          "ret_252d_skip21": 0,
+          "ret_1d": 0,
+          "vol_21d": 13,
+          "vol_63d": 8,
+          "vol_ratio_21_63": 0,
+          "dollar_vol_21d_z": 0,
+          "vol_surge_5_63": 0,
+          "rsi_14": 0,
+          "dist_from_sma200": 0
+        }
+      },
+      "momentum_agreement": {
+        "mean_daily_spearman": 0.00047096529536252236,
+        "median_daily_spearman": 0.0028225806451612906,
+        "std_daily_spearman": 0.21993314751801746,
+        "n_days": 2637
+      },
+      "ic_stability": {
+        "model": {
+          "mean": 0.009932098529236731,
+          "std": 0.03294316488940861,
+          "std_over_abs_mean": 3.3168383088865965
+        },
+        "momentum": {
+          "mean": 0.029270033106209133,
+          "std": 0.047105983084665994,
+          "std_over_abs_mean": 1.6093587224085946
+        },
+        "cross_fold_correlation": 0.17975334605650123,
+        "n_folds": 21
+      },
+      "tail_divergence": {
+        "pct_days_diverged": 0.9185606060606061,
+        "model_tail_spread_on_diverged_days": -0.0006248562702185178,
+        "momentum_tail_spread_on_diverged_days": 0.005076331986471675,
+        "spread_ratio": 8.123999435416462,
+        "losing_swap_rate": 0.5154639175257731,
+        "n_rebalance_days": 528,
+        "n_diverged_days": 485
+      },
+      "turnover_comparison": {
+        "model_mean_turnover": 0.6818181818181818,
+        "momentum_mean_turnover": 0.1537247474747475
+      },
+      "hyperparameter_binding": {
+        "note": "Refit of the final CV fold (400 trees, 122436 training rows) shows a mean of 27.7 leaves per tree against the configured cap of 31 (max observed 31), with 14.0% of trees hitting the num_leaves cap. This does not show num_leaves consistently binding in this fold; min_child_samples or max_depth may be the tighter constraint here instead.",
+        "leaf_count_summary": {
+          "n_trees": 400,
+          "mean_leaves_per_tree": 27.7,
+          "max_leaves_per_tree": 31,
+          "pct_trees_at_num_leaves_cap": 0.14
+        },
+        "min_child_samples_configured": 50,
+        "num_leaves_configured": 31,
+        "final_fold_id": 20,
+        "final_fold_train_rows": 122436
+      },
+      "summary": [
+        "vol_21d and vol_63d are redundant (Spearman rho=0.806), one of 1 feature pairs at or above the 0.75 redundancy threshold.",
+        "vol_21d is the top SHAP feature in 13/21 folds: the model leans on one feature family rather than a diversified signal.",
+        "The model's daily rank correlation with momentum is only 0.0005: it is not a noisy copy of momentum.",
+        "Model fold-IC std/|mean| is 3.32 vs momentum's 1.61, and the two sides' fold-level IC are correlated at only 0.180 across folds: the model's edge is less stable fold to fold, and a good or bad fold for one does not predict a good or bad fold for the other.",
+        "On 91.9% of rebalance days the model's tail picks diverge from momentum's; on those days the model's realized tail spread is about 8.1x smaller than momentum's, with a 51.5% losing-swap rate.",
+        "Model turnover (68.2% per rebalance) is far higher than momentum's (15.4%): more trading without a matching payoff.",
+        "Refit of the final CV fold (400 trees, 122436 training rows) shows a mean of 27.7 leaves per tree against the configured cap of 31 (max observed 31), with 14.0% of trees hitting the num_leaves cap. This does not show num_leaves consistently binding in this fold; min_child_samples or max_depth may be the tighter constraint here instead."
+      ]
     }
   }
 }
